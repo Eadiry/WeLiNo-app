@@ -213,6 +213,8 @@ window.tts = new (function () {
     if (!text) return '';
     return text
       .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
       .replace(/\s*([.,!?;:])\s*/g, '$1 ')
       .trim();
   };
