@@ -335,9 +335,12 @@ export default function useChapter(
 
       try {
         // Start the text load first: it is the only thing needed to paint.
+        // Always re-read the row so the restored reading position comes from
+        // the current `progress` — the cached adjacent-chapter objects can be
+        // stale (e.g. swiping back to a chapter you were part-way through).
         const htmlPromise = loadChapterHtml(requested);
         const [dbChapter, html] = await Promise.all([
-          navChapter ? undefined : getDbChapter(requested.id),
+          getDbChapter(requested.id),
           htmlPromise,
         ]);
         if (isStale()) {
@@ -463,6 +466,12 @@ export default function useChapter(
       const navChapter = position === 'NEXT' ? next : prev;
 
       if (navChapter) {
+        // Persist the outgoing chapter's position first, so coming back to it
+        // (e.g. swiping back a chapter) restores where you were instead of the
+        // top.
+        webViewRef.current?.injectJavaScript(
+          `if (window.reader?.chapter) { reader.post({ type: 'save', data: reader.chapter.progress }); } true;`,
+        );
         getChapter(navChapter);
       } else {
         showToast(
@@ -472,7 +481,7 @@ export default function useChapter(
         );
       }
     },
-    [getChapter],
+    [getChapter, webViewRef],
   );
 
   // Keep the history/last-read entry up to date, off the critical path of the

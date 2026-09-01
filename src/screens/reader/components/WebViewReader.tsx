@@ -155,6 +155,13 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
   const readerTopInset =
     Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : safeAreaTop;
   const readerBottomInset = Platform.OS === 'android' ? 0 : safeAreaBottom;
+  // Snapshot at mount for the baked-in document. Later inset changes (rotation)
+  // are pushed with injectJavaScript below so `source` stays stable and the
+  // WebView is never reloaded — a reload would drop the reading position.
+  const [mountInsets] = useState(() => ({
+    top: readerTopInset,
+    bottom: readerBottomInset,
+  }));
   const initialReaderSettings = useMemo(
     () => ({
       ...initialChapterReaderSettings,
@@ -325,6 +332,18 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
       mmkvListener.remove();
     };
   }, [updateTtsSettings, webViewRef]);
+
+  // Safe-area insets change on rotation. Push them into the live document
+  // instead of rebuilding `source` (which reloads the WebView and loses the
+  // reading position).
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(
+      `document.documentElement.style.setProperty('--StatusBar-currentHeight', '${readerTopInset}px');
+       document.documentElement.style.setProperty('--reader-bottom-inset', '${readerBottomInset}px');
+       true;`,
+    );
+  }, [readerTopInset, readerBottomInset, webViewRef]);
+
   const isRTL = plugin?.lang === 'Arabic' || plugin?.lang === 'Hebrew';
   const readerDir = isRTL ? 'rtl' : 'ltr';
 
@@ -337,6 +356,7 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
   const source = useMemo(() => {
     // eslint-disable-next-line react-hooks/refs
     const isNextChapterScreenVisible = nextChapterScreenVisible.current;
+    const { top: topInset, bottom: bottomInset } = mountInsets;
     return {
       baseUrl: !chapter.isDownloaded ? plugin?.site : undefined,
       headers: plugin?.imageRequestInit?.headers,
@@ -350,8 +370,8 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
               <style id="ln-reader-assets">${READER_CSS}</style>
               <style>
               :root {
-                --StatusBar-currentHeight: ${readerTopInset}px;
-                --reader-bottom-inset: ${readerBottomInset}px;
+                --StatusBar-currentHeight: ${topInset}px;
+                --reader-bottom-inset: ${bottomInset}px;
                 --readerSettings-textIndent: ${
                   chapterGeneralSettings.removeTextIndent ? '0' : '1.5em'
                 };
@@ -465,13 +485,12 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
     customJS,
     customCSS,
     initialReaderSettings,
+    mountInsets,
     novel,
     plugin,
     pluginCustomCSS,
     pluginCustomJS,
     readerDir,
-    readerTopInset,
-    readerBottomInset,
     theme,
   ]);
 

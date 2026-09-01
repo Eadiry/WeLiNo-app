@@ -188,7 +188,11 @@ describe('useChapter', () => {
       showStatusAndNavBar: jest.fn(),
     });
 
-    mockGetDbChapter.mockResolvedValue(initialChapter);
+    // getChapter() re-reads the target row by id (for fresh reading progress),
+    // so the mock has to honour the id it is given.
+    mockGetDbChapter.mockImplementation(async (id?: number) =>
+      id === nextChapter.id ? nextChapter : initialChapter,
+    );
     mockGetChapterCount.mockResolvedValue(1);
     mockGetNextChapter.mockResolvedValue(undefined);
     mockGetPrevChapter.mockResolvedValue(undefined);

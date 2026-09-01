@@ -209,9 +209,23 @@ is implemented (pre-existing limitation). No brightness slider (would need
   `assets/reader/js/core.js` picks the first on-screen readable element;
   `ReaderScreen.startTts` calls it instead of `tts.start()` (which always
   began at paragraph 0).
-- **Rotation keeps your place.** `core.js`'s `resize` handler now records the
-  viewport-centre fraction of the chapter before the reflow and scrolls back
-  to it afterwards (scroll mode).
+- **Rotation keeps your place.** Two causes: (a) `WebViewReader` had the
+  safe-area insets in the `source` useMemo deps — rotation changes the insets
+  → new `source` → the WebView _reloaded the whole chapter_. Insets are now a
+  mount-time snapshot in the HTML and later changes are pushed via
+  `injectJavaScript` (CSS vars), so `source` never changes on rotation.
+  (b) `core.js`'s `resize` handler now records the viewport-centre fraction of
+  the chapter before the reflow and scrolls back to it (scroll mode).
+- **Returning to a chapter restores your position.** `useChapter.getChapter`
+  now always re-reads the target row from the DB (was trusting the cached
+  adjacent-chapter object, whose `progress` was stale), and `navigateChapter`
+  flushes the outgoing chapter's `progress` before switching. Swiping back a
+  chapter no longer lands at the top.
+- **Page-mode swipes.** `core.js` swipe handler: page-turn threshold 30% → 16%
+  of the width, plus a flick-velocity shortcut; `touchmove` is now
+  non-passive and calls `preventDefault()` on a mostly-horizontal drag so the
+  page can't scroll up/down while turning; page transitions (swipe release,
+  tap, buttons) use an ease-out curve.
 - **More voices** is an iOS limitation — `AVSpeechSynthesizer` only exposes
   installed system voices, and **Siri voices are never returned to
   third-party apps**. Only the "Enhanced"/"Premium" downloadable voices show

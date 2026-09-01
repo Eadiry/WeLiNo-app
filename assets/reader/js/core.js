@@ -612,6 +612,11 @@ window.pageReader = new (function () {
       return;
     }
     this.page.val = destPage;
+    if (interaction) {
+      // Ease tap / button page turns the same way a swipe-release does.
+      reader.chapterElement.style.transition =
+        'transform 230ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+    }
     reader.chapterElement.style.transform =
       'translateX(-' + destPage * 100 + '%)';
 
@@ -908,21 +913,37 @@ window.addEventListener('load', () => {
 (function () {
   this.initialX = null;
   this.initialY = null;
+  this.startTime = 0;
+  // Horizontal drag past this fraction of the width, OR a quick flick, turns
+  // the page. Lower than it used to be so short swipes register.
+  const PAGE_TURN_FRACTION = 0.16;
+  const FLICK_VELOCITY = 0.35; // px per ms
+  const PAGE_EASING = 'transform 230ms cubic-bezier(0.22, 0.61, 0.36, 1)';
 
   reader.chapterElement.addEventListener('touchstart', e => {
     this.initialX = e.changedTouches[0].screenX;
     this.initialY = e.changedTouches[0].screenY;
+    this.startTime = Date.now();
   });
 
-  reader.chapterElement.addEventListener('touchmove', e => {
-    if (reader.generalSettings.val.pageReader) {
-      const diffX =
-        (e.changedTouches[0].screenX - this.initialX) / reader.layoutWidth;
-      reader.chapterElement.style.transition = 'unset';
-      reader.chapterElement.style.transform =
-        'translateX(-' + (pageReader.page.val - diffX) * 100 + '%)';
-    }
-  });
+  reader.chapterElement.addEventListener(
+    'touchmove',
+    e => {
+      if (reader.generalSettings.val.pageReader) {
+        const dx = e.changedTouches[0].screenX - this.initialX;
+        const dy = e.changedTouches[0].screenY - this.initialY;
+        // Keep the page from scrolling up/down while dragging sideways.
+        if (Math.abs(dx) > Math.abs(dy)) {
+          e.preventDefault();
+        }
+        const diffX = dx / reader.layoutWidth;
+        reader.chapterElement.style.transition = 'unset';
+        reader.chapterElement.style.transform =
+          'translateX(-' + (pageReader.page.val - diffX) * 100 + '%)';
+      }
+    },
+    { passive: false },
+  );
 
   reader.chapterElement.addEventListener('touchend', e => {
     const diffX = e.changedTouches[0].screenX - this.initialX;
@@ -931,11 +952,17 @@ window.addEventListener('load', () => {
       if (Math.abs(diffX) > 8 || Math.abs(diffY) > 8) {
         pageReader.ignoreClickUntil = Date.now() + 400;
       }
-      reader.chapterElement.style.transition = 'transform 200ms';
+      reader.chapterElement.style.transition = PAGE_EASING;
       const diffXPercentage = diffX / reader.layoutWidth;
-      if (diffXPercentage < -0.3) {
+      const elapsed = Math.max(1, Date.now() - this.startTime);
+      const velocity = Math.abs(diffX) / elapsed;
+      const flick =
+        velocity > FLICK_VELOCITY &&
+        Math.abs(diffX) > 12 &&
+        Math.abs(diffX) > Math.abs(diffY);
+      if (diffXPercentage < -PAGE_TURN_FRACTION || (flick && diffX < 0)) {
         pageReader.movePage(pageReader.page.val + 1);
-      } else if (diffXPercentage > 0.3) {
+      } else if (diffXPercentage > PAGE_TURN_FRACTION || (flick && diffX > 0)) {
         pageReader.movePage(pageReader.page.val - 1);
       } else {
         pageReader.movePage(pageReader.page.val);
