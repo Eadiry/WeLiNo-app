@@ -193,6 +193,30 @@ path, so on iOS it enqueues but does nothing until the background-task module
 is implemented (pre-existing limitation). No brightness slider (would need
 `expo-brightness`); no comments button (LNReader has no comments).
 
+### Reader gesture / TTS / rotation fixes
+
+- **Swipe-back no longer dumps you in the library.** The Main-stack
+  `ReaderStack` screen had `fullScreenGestureEnabled: true` (from the global
+  iOS `backNavOptions`), so any horizontal drag mid-chapter popped the whole
+  reader stack. Now `fullScreenGestureEnabled: false` on that screen, and the
+  `Chapter` screen in `ReaderStack` sets `gestureEnabled: false` too — the
+  left edge belongs to the chapter drawer, a big horizontal swipe is
+  prev/next chapter (`swipeGestures`, now **on by default** in
+  `initialChapterGeneralSettings`), and the `✕` button is the way out.
+  `useChapterGeneralSettings` now merges stored settings over the defaults so
+  the new default reaches users who already have a saved settings object.
+- **TTS starts from the visible paragraph.** New `tts.startFromVisible()` in
+  `assets/reader/js/core.js` picks the first on-screen readable element;
+  `ReaderScreen.startTts` calls it instead of `tts.start()` (which always
+  began at paragraph 0).
+- **Rotation keeps your place.** `core.js`'s `resize` handler now records the
+  viewport-centre fraction of the chapter before the reflow and scrolls back
+  to it afterwards (scroll mode).
+- **More voices** is an iOS limitation — `AVSpeechSynthesizer` only exposes
+  installed system voices; Google/Azure voices ("Christopher" etc.) would
+  need a cloud TTS integration. The voice picker now points users to iOS
+  Settings › Accessibility › Spoken Content › Voices.
+
 ### Remaining 1.5 work
 
 Verify `nitro-tts` actually plays with the screen locked + lock-screen

@@ -1,5 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Pressable, View, StyleSheet, Text, ScrollView } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  View,
+  StyleSheet,
+  Text,
+  ScrollView,
+} from 'react-native';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Dialog, List, Slider } from '@components';
 import { getLocales } from 'expo-localization';
@@ -126,6 +133,12 @@ const VoicePickerModal: React.FC<VoicePickerModalProps> = ({
             })}
           </ScrollView>
         </View>
+        {Platform.OS === 'ios' ? (
+          <Text style={[styles.filterLabel, { color: theme.onSurfaceVariant }]}>
+            More voices (Siri, enhanced, other languages) can be added in iOS
+            Settings › Accessibility › Spoken Content › Voices.
+          </Text>
+        ) : null}
       </Dialog.Content>
       <Dialog.ScrollArea>
         <ScrollView style={styles.voiceList}>

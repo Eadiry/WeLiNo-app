@@ -327,6 +327,26 @@ window.tts = new (function () {
     });
   };
 
+  // Start narration from the paragraph currently on screen rather than the top
+  // of the chapter.
+  this.startFromVisible = () => {
+    const readable = this.getAllReadableElements(reader.chapterElement).filter(
+      el => !!this.normalizeText(el.innerText),
+    );
+    if (!readable.length) {
+      this.start();
+      return;
+    }
+    const vh = reader.layoutHeight || window.innerHeight;
+    const vw = reader.layoutWidth || window.innerWidth;
+    const target =
+      readable.find(el => {
+        const r = el.getBoundingClientRect();
+        return r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
+      }) || readable[0];
+    this.start(target);
+  };
+
   // Get all readable elements in order
   this.getAllReadableElements = element => {
     const elements = [];
@@ -738,11 +758,27 @@ reader.chapterElement.addEventListener(
 let viewportResizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(viewportResizeTimer);
+  // Rotating the device reflows the chapter, which changes its total height and
+  // leaves the old scrollY pointing somewhere else (often the top). Remember
+  // where the middle of the viewport was as a fraction of the chapter and put
+  // it back after the reflow.
+  const prevRatio =
+    reader.chapterHeight > 0
+      ? (window.scrollY + reader.layoutHeight / 2) / reader.chapterHeight
+      : 0;
   viewportResizeTimer = setTimeout(() => {
     if (reader.generalSettings.val.pageReader) {
       schedulePageCalculation();
     } else {
       reader.refresh();
+      if (reader.chapterHeight > 0 && prevRatio > 0) {
+        window.scrollTo({
+          top: Math.max(
+            0,
+            prevRatio * reader.chapterHeight - reader.layoutHeight / 2,
+          ),
+        });
+      }
     }
   }, 100);
 });

@@ -42,7 +42,14 @@ const ReaderStack = ({ route }) => {
         <Stack.Screen
           name="Chapter"
           component={Reader}
-          options={{ contentStyle: { backgroundColor: readerBackground } }}
+          // No native swipe-back on the chapter: the left edge belongs to the
+          // chapter drawer and a horizontal swipe is prev/next chapter. The
+          // reader's own close button is the way out.
+          options={{
+            contentStyle: { backgroundColor: readerBackground },
+            gestureEnabled: false,
+            fullScreenGestureEnabled: false,
+          }}
         />
       </Stack.Navigator>
     </NovelContextProvider>

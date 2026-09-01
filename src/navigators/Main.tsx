@@ -137,7 +137,15 @@ const MainNavigator = () => {
             }}
           >
             <Stack.Screen name="BottomNavigator" component={BottomNavigator} />
-            <Stack.Screen name="ReaderStack" component={ReaderStack} />
+            <Stack.Screen
+              name="ReaderStack"
+              component={ReaderStack}
+              // A full-screen swipe-back here would fire mid-chapter and drop
+              // the reader straight back to the library. The reader has its own
+              // close button + in-page swipe navigation; leave only the
+              // edge-swipe (for the Novel screen).
+              options={{ fullScreenGestureEnabled: false }}
+            />
             <Stack.Screen name="MoreStack" component={MoreStack} />
             <Stack.Screen name="SourceScreen" component={BrowseSourceScreen} />
             <Stack.Screen name="BrowseMal" component={MalTopNovels} />

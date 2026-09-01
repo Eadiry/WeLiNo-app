@@ -219,7 +219,10 @@ export const ChapterContent = ({
   );
 
   const startTts = useCallback(() => {
-    webViewRef?.current?.injectJavaScript('window.tts?.start(); true;');
+    // Begin narration from the paragraph on screen, not the top of the chapter.
+    webViewRef?.current?.injectJavaScript(
+      '(window.tts?.startFromVisible ?? window.tts?.start)?.call(window.tts); true;',
+    );
   }, [webViewRef]);
 
   const handleDownloadChapter = useCallback(() => {

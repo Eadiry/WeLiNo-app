@@ -304,7 +304,7 @@ export const initialChapterGeneralSettings: ChapterGeneralSettings = {
   keepScreenOn: true,
   fullScreenMode: true,
   pageReader: false,
-  swipeGestures: false,
+  swipeGestures: true,
   showScrollPercentage: true,
   useVolumeButtons: false,
   volumeButtonsOffset: null,
@@ -402,8 +402,17 @@ export const useLibrarySettings = () => {
 };
 
 export const useChapterGeneralSettings = () => {
-  const [chapterGeneralSettings = initialChapterGeneralSettings, setSettings] =
-    useMMKVObject<ChapterGeneralSettings>(CHAPTER_GENERAL_SETTINGS);
+  const [storedSettings, setSettings] = useMMKVObject<ChapterGeneralSettings>(
+    CHAPTER_GENERAL_SETTINGS,
+  );
+
+  // Merge over the defaults so settings added after a user first opened the
+  // reader (e.g. `swipeGestures`, `removeTextIndent`) still take their default
+  // value instead of `undefined`.
+  const chapterGeneralSettings = {
+    ...initialChapterGeneralSettings,
+    ...storedSettings,
+  };
 
   const setChapterGeneralSettings = (values: Partial<ChapterGeneralSettings>) =>
     setSettings({ ...chapterGeneralSettings, ...values });
