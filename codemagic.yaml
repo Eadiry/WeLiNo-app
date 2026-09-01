@@ -11,11 +11,13 @@
 #   - App Store provisioning profile         "WeLiNo AppStore Profile"
 # all for bundle id com.welino.reader.
 #
-# Speed: everything expensive is cached between builds — the pnpm store +
-# node_modules, the CocoaPods spec repo + downloaded pods + the installed
-# `ios/Pods`, the Ruby gems, ccache (C/C++ pod objects: Reanimated, RNScreens,
-# nitro-*, op-sqlite, MMKV, …) and Xcode DerivedData. First build is full;
-# later builds only recompile what changed.
+# Speed: ccache carries the compiled C/C++ pod objects (Reanimated, RNScreens,
+# nitro-*, op-sqlite, MMKV, folly…) between builds — that's most of the archive
+# time. The pnpm store + the pinned Ruby gems are cached too. We deliberately
+# DON'T cache node_modules / ios/Pods / the CocoaPods spec repo: they're big
+# many-small-file trees that Codemagic's post-build "cleaning up" step spends
+# longer tarring + uploading than they ever save. `pnpm install` rehydrates
+# node_modules from the store in seconds; `pod install` pulls from the CDN.
 
 workflows:
   ios-testflight:
@@ -44,17 +46,17 @@ workflows:
       xcode: latest
       cocoapods: default
     cache:
+      # Keep this list SHORT. Codemagic packs + uploads every path here in the
+      # post-build "cleaning up" step; many-small-file trees (node_modules,
+      # ios/Pods, ~/.cocoapods/repos) cost more to pack than they save.
       cache_paths:
-        # ccache is the big lever — it skips recompiling unchanged C/C++ pod
-        # objects (Reanimated, RNScreens, nitro-*, op-sqlite, MMKV, folly…),
-        # which is most of the archive time.
+        # Compiled C/C++ pod objects — the real archive-time lever.
         - $HOME/Library/Caches/ccache
+        # Content-addressed + deduped; `pnpm install` rehydrates node_modules
+        # from it in seconds.
         - $HOME/Library/pnpm/store
-        - $CM_BUILD_DIR/node_modules
+        # The pinned cocoapods/xcodeproj gems (small, stable).
         - $CM_BUILD_DIR/vendor/bundle
-        - $HOME/Library/Caches/CocoaPods
-        - $HOME/.cocoapods/repos
-        - $CM_BUILD_DIR/ios/Pods
     triggering:
       events:
         - push
@@ -86,14 +88,15 @@ workflows:
         script: |
           brew list ccache >/dev/null 2>&1 || brew install ccache
           mkdir -p "$CCACHE_DIR"
-          ccache --max-size=5G
+          # Compressed + a modest cap so the cache dir stays small enough to
+          # pack quickly in "cleaning up". A full RN/Expo iOS ccache is ~1–2 G.
+          ccache --set-config=max_size=3G
+          ccache --set-config=compression=true
           ccache --zero-stats || true
 
       - name: Prebuild iOS project
         script: |
-          # No --clean: keep the cached ios/Pods so `pod install` is a no-op
-          # when nothing changed. `--non-interactive` isn't supported; CI=1
-          # (set in env) covers it.
+          # `--non-interactive` isn't supported; CI=1 (set in env) covers it.
           npx expo prebuild --platform ios --no-install
           echo "--- generated iOS project ---"
           ls -la ios
@@ -102,7 +105,7 @@ workflows:
         script: |
           # LNReader pins cocoapods/xcodeproj versions in the repo-root Gemfile
           # specifically to dodge known build breaks — use bundler, not the
-          # image default. Gems + pods are cached.
+          # image default. Gems are cached; pods download from the CDN.
           bundle config set --local path "vendor/bundle"
           bundle install --jobs 4
           cd ios
