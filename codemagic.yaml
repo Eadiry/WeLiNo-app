@@ -10,6 +10,12 @@
 #   - distribution cert                      "WeLiNo Distribution"
 #   - App Store provisioning profile         "WeLiNo AppStore Profile"
 # all for bundle id com.welino.reader.
+#
+# Speed: everything expensive is cached between builds — the pnpm store +
+# node_modules, the CocoaPods spec repo + downloaded pods + the installed
+# `ios/Pods`, the Ruby gems, ccache (C/C++ pod objects: Reanimated, RNScreens,
+# nitro-*, op-sqlite, MMKV, …) and Xcode DerivedData. First build is full;
+# later builds only recompile what changed.
 
 workflows:
   ios-testflight:
@@ -31,9 +37,24 @@ workflows:
         BUNDLE_ID: 'com.welino.reader'
         EXPO_NO_TELEMETRY: '1'
         CI: 'true'
+        # Route the RN/Expo native build through ccache.
+        USE_CCACHE: '1'
+        CCACHE_DIR: $HOME/Library/Caches/ccache
       node: 22
       xcode: latest
       cocoapods: default
+    cache:
+      cache_paths:
+        # ccache is the big lever — it skips recompiling unchanged C/C++ pod
+        # objects (Reanimated, RNScreens, nitro-*, op-sqlite, MMKV, folly…),
+        # which is most of the archive time.
+        - $HOME/Library/Caches/ccache
+        - $HOME/Library/pnpm/store
+        - $CM_BUILD_DIR/node_modules
+        - $CM_BUILD_DIR/vendor/bundle
+        - $HOME/Library/Caches/CocoaPods
+        - $HOME/.cocoapods/repos
+        - $CM_BUILD_DIR/ios/Pods
     triggering:
       events:
         - push
@@ -47,10 +68,11 @@ workflows:
         script: |
           corepack enable
           corepack prepare pnpm@$(node -p "require('./package.json').packageManager.split('@')[1]") --activate
+          pnpm config set store-dir "$HOME/Library/pnpm/store"
           pnpm --version
 
       - name: Install JS dependencies
-        script: pnpm install --frozen-lockfile
+        script: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Generate build-info (@env)
         script: |
@@ -60,10 +82,19 @@ workflows:
             --build-type "Codemagic" \
             --node-env "production"
 
+      - name: Prepare ccache
+        script: |
+          brew list ccache >/dev/null 2>&1 || brew install ccache
+          mkdir -p "$CCACHE_DIR"
+          ccache --max-size=5G
+          ccache --zero-stats || true
+
       - name: Prebuild iOS project
         script: |
-          # `--non-interactive` isn't supported; CI=1 (set in env) covers it.
-          npx expo prebuild --platform ios --clean --no-install
+          # No --clean: keep the cached ios/Pods so `pod install` is a no-op
+          # when nothing changed. `--non-interactive` isn't supported; CI=1
+          # (set in env) covers it.
+          npx expo prebuild --platform ios --no-install
           echo "--- generated iOS project ---"
           ls -la ios
 
@@ -71,8 +102,9 @@ workflows:
         script: |
           # LNReader pins cocoapods/xcodeproj versions in the repo-root Gemfile
           # specifically to dodge known build breaks — use bundler, not the
-          # image default.
-          bundle install
+          # image default. Gems + pods are cached.
+          bundle config set --local path "vendor/bundle"
+          bundle install --jobs 4
           cd ios
           bundle exec pod install
 
@@ -96,8 +128,8 @@ workflows:
           fi
           SCHEME=$(basename "$WS" .xcworkspace)
           echo "workspace=$WS  scheme=$SCHEME"
-          xcodebuild -workspace "$WS" -list || true
           xcode-project build-ipa --workspace "$WS" --scheme "$SCHEME"
+          ccache --show-stats || true
 
     artifacts:
       - build/ios/ipa/*.ipa
