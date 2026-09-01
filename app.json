@@ -10,11 +10,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/native/ic_launcher_round.png",
+          "image": "./assets/native/ic_launcher.png",
           "backgroundColor": "#FFFFFF",
           "resizeMode": "contain",
+          "imageWidth": 300,
           "dark": {
-            "image": "./assets/native/ic_launcher_round.png",
+            "image": "./assets/native/ic_launcher.png",
             "backgroundColor": "#FFFFFF"
           },
           "android": {
