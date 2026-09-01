@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // Screens
@@ -21,6 +22,17 @@ import GenreTaxonomyScreen from '@screens/settings/SettingsTaxonomyScreen/Settin
 import { MoreStackParamList, SettingsStackParamList } from './types';
 import { useTheme } from '@hooks/persisted';
 
+// iOS: real transition + full-screen swipe-back (no hardware back button).
+// Android: instant, hardware back handles dismissal.
+const backNavOptions =
+  Platform.OS === 'ios'
+    ? ({
+        animation: 'default',
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+      } as const)
+    : ({ animation: 'none' } as const);
+
 const Stack = createNativeStackNavigator<
   MoreStackParamList & SettingsStackParamList
 >();
@@ -31,7 +43,7 @@ const SettingsStack = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        animation: 'none',
+        ...backNavOptions,
         contentStyle: { backgroundColor: theme.background },
         headerShown: false,
       }}
@@ -48,7 +60,7 @@ const SettingsStack = () => {
         component={RespositorySettings}
       />
       <Stack.Screen name="LibrarySettings" component={LibrarySettings} />
-<Stack.Screen name="CustomCode" component={SettingsCustomCode} />
+      <Stack.Screen name="CustomCode" component={SettingsCustomCode} />
       <Stack.Screen name="CodeSnippets" component={CodeSnippetsScreen} />
       <Stack.Screen name="GenreTaxonomy" component={GenreTaxonomyScreen} />
     </Stack.Navigator>
@@ -61,7 +73,7 @@ const MoreStack = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        animation: 'none',
+        ...backNavOptions,
         contentStyle: { backgroundColor: theme.background },
         headerShown: false,
       }}

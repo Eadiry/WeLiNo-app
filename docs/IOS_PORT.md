@@ -55,6 +55,23 @@ No new features.
   fails on it, gate the export button behind `Platform.OS === 'android'` and
   exclude the pod.
 
+### iOS UX fixes
+
+- **No way to go back.** Top-level stacks (`Main.tsx`, `MoreStack.tsx`) set
+  `animation: 'none'`, which also kills native-stack's interactive
+  swipe-back on iOS — and there's no hardware back button. iOS now gets
+  `animation: 'default'` + `gestureEnabled` + `fullScreenGestureEnabled`
+  (swipe anywhere to go back); Android keeps `'none'`. Shared `Appbar`
+  used `StatusBar.currentHeight` (Android-only) for `statusBarHeight`,
+  dropping the header under the Dynamic Island; now uses the safe-area top
+  inset on iOS.
+- **Browse filters had no visible dropdown affordance.** `FilterBottomSheet`
+  `Picker` filters (translation status, sort by, …) rendered as a bare
+  disabled `TextInput` with no caret and an unreliable iOS tap target. Added
+  a `menu-down`/`menu-up` right icon and wrapped the field in
+  `pointerEvents="none"` so the whole row is one tap target — matches the
+  language picker.
+
 ### Build-log / runtime fixes applied
 
 - **"undefined is not a function" opening a chapter (reader crash).**

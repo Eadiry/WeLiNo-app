@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -39,6 +40,21 @@ import ReaderStack from './ReaderStack';
 import { LibraryContextProvider } from '@components/Context/LibraryContext';
 import { UpdateContextProvider } from '@components/Context/UpdateContext';
 import { useReactNavigationDevTools } from '@rozenite/react-navigation-plugin';
+
+/**
+ * iOS has no hardware back button, and `animation: 'none'` disables the
+ * interactive swipe-back gesture on native-stack. Give iOS a real transition
+ * plus a full-screen swipe-back so every pushed screen can be dismissed;
+ * keep Android instant.
+ */
+const backNavOptions =
+  Platform.OS === 'ios'
+    ? ({
+        animation: 'default',
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
+      } as const)
+    : ({ animation: 'none' } as const);
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const MainNavigator = () => {
@@ -113,7 +129,7 @@ const MainNavigator = () => {
           <AppUpdateChecker />
           <Stack.Navigator
             screenOptions={{
-              animation: 'none',
+              ...backNavOptions,
               contentStyle: { backgroundColor: theme.background },
               headerShown: false,
             }}

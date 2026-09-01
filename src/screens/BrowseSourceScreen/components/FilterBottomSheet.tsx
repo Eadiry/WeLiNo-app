@@ -95,8 +95,7 @@ const FilterItem: React.FC<FilterItemProps> = ({
       selectedFilters[filterKey],
     );
     const label =
-      filter.options.find(option => option.value === value)?.label ||
-      'whatever';
+      filter.options.find(option => option.value === value)?.label || '';
     return (
       <View style={styles.pickerContainer}>
         <Menu
@@ -107,27 +106,39 @@ const FilterItem: React.FC<FilterItemProps> = ({
             <Pressable
               style={[styles.flex, { width: screenWidth - 48 }]}
               onPress={toggleCard}
+              android_ripple={{ color: theme.rippleColor }}
             >
-              <TextInput
-                mode="outlined"
-                label={
-                  <Text
-                    style={[
-                      {
-                        color: isVisible ? theme.primary : theme.onSurface,
-                        backgroundColor: overlay(2, theme.surface),
-                      },
-                    ]}
-                  >
-                    {` ${filter.label} `}
-                  </Text>
-                }
-                value={label}
-                editable={false}
-                theme={{ colors: { background: 'transparent' } }}
-                outlineColor={isVisible ? theme.primary : theme.onSurface}
-                textColor={isVisible ? theme.primary : theme.onSurface}
-              />
+              {/* pointerEvents:none so the whole field (caret included) is one
+                  tap target that reaches the Pressable — a bare disabled
+                  TextInput swallows/misses touches on iOS. */}
+              <View pointerEvents="none">
+                <TextInput
+                  mode="outlined"
+                  label={
+                    <Text
+                      style={[
+                        {
+                          color: isVisible ? theme.primary : theme.onSurface,
+                          backgroundColor: overlay(2, theme.surface),
+                        },
+                      ]}
+                    >
+                      {` ${filter.label} `}
+                    </Text>
+                  }
+                  value={label}
+                  editable={false}
+                  right={
+                    <TextInput.Icon
+                      icon={isVisible ? 'menu-up' : 'menu-down'}
+                      color={isVisible ? theme.primary : theme.onSurface}
+                    />
+                  }
+                  theme={{ colors: { background: 'transparent' } }}
+                  outlineColor={isVisible ? theme.primary : theme.onSurface}
+                  textColor={isVisible ? theme.primary : theme.onSurface}
+                />
+              </View>
             </Pressable>
           }
           onDismiss={closeCard}
