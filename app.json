@@ -11,20 +11,20 @@
         "expo-splash-screen",
         {
           "image": "./assets/native/ic_launcher_round.png",
-          "backgroundColor": "#1D1B20",
+          "backgroundColor": "#FFFFFF",
           "resizeMode": "contain",
           "dark": {
             "image": "./assets/native/ic_launcher_round.png",
-            "backgroundColor": "#000000"
+            "backgroundColor": "#FFFFFF"
           },
           "android": {
             "image": "./assets/native/splash_icon.png",
-            "backgroundColor": "#132C33",
+            "backgroundColor": "#FFFFFF",
             "imageWidth": 288,
-            "resizeMode": "native",
+            "resizeMode": "contain",
             "dark": {
               "image": "./assets/native/splash_icon.png",
-              "backgroundColor": "#132C33"
+              "backgroundColor": "#FFFFFF"
             }
           }
         }
