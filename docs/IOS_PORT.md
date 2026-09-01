@@ -289,13 +289,27 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
 
 ## Milestone 2 — WeLiNo features
 
-1. **Continuous cross-chapter TTS.** JS builds the paragraph queue from the
-   current chapter **plus N ahead** (fetch/parse/process each), tags each
-   paragraph with its chapter, pushes all in one `session.load()` so native
-   survives JS suspension; tops up on foreground; updates now-playing
-   metadata + reading position on chapter crossings. The Swift
-   `TtsPlaybackCoordinator` needs an `append(paragraphs:)` (today only
-   `load()` which replaces) and a low-water / `queueLow` event.
+1. **Continuous cross-chapter TTS** — _implemented (iOS), pending on-device
+   verification._
+   - Nitro spec: `TtsParagraph` gains `chapterId`/`chapterName`, `TtsProgress`
+     gains `chapterId`, `TtsSession` gains `appendParagraphs()` +
+     `addOnQueueLowListener()`. Regenerated with `pnpm --dir modules/nitro-tts specs`.
+   - iOS `TtsPlaybackCoordinator`: `append()` (revives a finished queue),
+     `queueLow` emitted when the tail is ≤16 paragraphs, lock-screen title
+     follows the chapter as `currentIndex` advances. Android: minimal stubs
+     (`append` to the store, no-op `queueLow`) so it compiles; no continuous
+     playback there.
+   - RN: `src/services/tts/chapterParagraphs.ts` extracts a chapter's
+     paragraphs off-screen (cheerio + the reader's `normalizeText`, title as
+     paragraph 0). `useTtsSession` is now an orchestrator — `loadAndPlay`
+     starts the visible chapter then buffers **2 chapters ahead**;
+     `onQueueLow` → fetch + `appendParagraphs`; `onProgress.chapterId` change
+     → `useChapter.setChapterFromTts()` moves the reader (via
+     `ttsDrivenChapterChangeRef` so the "stop TTS on chapter change" guard is
+     skipped) and marks the left chapter read.
+   - `core.js`: `tts.start()` tags the queue with `chapterId`; `tts.complete()`
+     no longer drives navigation (native owns it); new
+     `setActiveByParagraphId()` highlights by id and ignores other chapters.
 2. **Text pipeline** before `load()`: persistent character-name substitution,
    offline MTL cleanup, LanguageTool deep-clean, CJK auto-romanisation.
    Port from the Capacitor WeLiNo repo (`src/pipeline/`, `src/substitution/`).

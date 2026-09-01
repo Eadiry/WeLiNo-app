@@ -143,6 +143,9 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
     onUserInteraction,
     isTTSReadingRef,
     refetch,
+    getChapterAfter,
+    setChapterFromTts,
+    ttsDrivenChapterChangeRef,
   } = useChapterContext();
   const theme = useTheme();
   const { top: safeAreaTop, bottom: safeAreaBottom } = useSafeAreaInsets();
@@ -235,9 +238,14 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
   }, [isTTSReadingRef, ttsState, webViewRef]);
 
   useEffect(() => {
-    if (ttsProgress.total > 0) {
+    if (ttsProgress.paragraphId) {
+      // The native queue can span several chapters, so the index is global —
+      // address the highlight by paragraph id instead. `core.js` ignores ids
+      // that aren't in the visible chapter.
       webViewRef.current?.injectJavaScript(`
-        window.tts?.setActiveIndex?.(${ttsProgress.index});
+        window.tts?.setActiveByParagraphId?.(${JSON.stringify(
+          ttsProgress.paragraphId,
+        )});
         true;
       `);
     }
@@ -246,9 +254,15 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
   useEffect(() => {
     if (activeChapterIdRef.current !== chapter.id) {
       activeChapterIdRef.current = chapter.id;
-      runTtsCommand('stop');
+      // A chapter change driven by narration crossing a boundary must not tear
+      // down the still-playing native session.
+      if (ttsDrivenChapterChangeRef.current) {
+        ttsDrivenChapterChangeRef.current = false;
+      } else {
+        runTtsCommand('stop');
+      }
     }
-  }, [chapter.id, runTtsCommand]);
+  }, [chapter.id, runTtsCommand, ttsDrivenChapterChangeRef]);
 
   useEffect(() => {
     const script = buildAdjacentChapterScript(nextChapter, prevChapter);
@@ -570,9 +584,13 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
           switch (event.type) {
             case 'tts-queue': {
               const payload = event.data as
-                | { queue?: unknown; startIndex?: unknown }
+                | {
+                    queue?: unknown;
+                    startIndex?: unknown;
+                    chapterId?: unknown;
+                  }
                 | undefined;
-              const queue = Array.isArray(payload?.queue)
+              const texts = Array.isArray(payload?.queue)
                 ? payload?.queue.filter(
                     (item): item is string =>
                       typeof item === 'string' && item.trim().length > 0,
@@ -582,8 +600,15 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
                 typeof payload?.startIndex === 'number'
                   ? payload.startIndex
                   : 0;
+              const chapterId =
+                typeof payload?.chapterId === 'string'
+                  ? payload.chapterId
+                  : String(chapter.id);
               void loadAndPlay(
-                queue,
+                texts.map((text, index) => ({
+                  id: `${chapterId}:${index}`,
+                  text,
+                })),
                 startIndex,
                 {
                   novelName: novel?.name || 'Unknown',
@@ -591,6 +616,15 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
                   coverUri: novel?.cover || undefined,
                 },
                 toNativeTtsSettings(readerSettingsRef.current.tts),
+                chapterId,
+                {
+                  novel,
+                  chapter,
+                  getChapterAfter,
+                  onChapterCrossed: crossedId => {
+                    void setChapterFromTts(crossedId);
+                  },
+                },
               );
               break;
             }

@@ -95,6 +95,14 @@ namespace margelo::nitro::nitrotts {
       auto __value = std::move(__result.value());
       return __value;
     }
+    inline std::shared_ptr<Promise<void>> appendParagraphs(const std::vector<TtsParagraph>& paragraphs) override {
+      auto __result = _swiftPart.appendParagraphs(paragraphs);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
     inline std::shared_ptr<Promise<void>> play() override {
       auto __result = _swiftPart.play();
       if (__result.hasError()) [[unlikely]] {
@@ -177,6 +185,14 @@ namespace margelo::nitro::nitrotts {
     }
     inline ListenerSubscription addOnErrorListener(const std::function<void(const std::string& /* message */)>& listener) override {
       auto __result = _swiftPart.addOnErrorListener(listener);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline ListenerSubscription addOnQueueLowListener(const std::function<void(double /* remaining */)>& listener) override {
+      auto __result = _swiftPart.addOnQueueLowListener(listener);
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

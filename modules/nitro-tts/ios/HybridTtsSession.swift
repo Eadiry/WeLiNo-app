@@ -19,6 +19,12 @@ final class HybridTtsSession: HybridTtsSessionSpec {
     }
   }
 
+  func appendParagraphs(paragraphs: [TtsParagraph]) throws -> Promise<Void> {
+    return MainQueuePromise.run {
+      self.coordinator.append(paragraphs)
+    }
+  }
+
   func play() throws -> Promise<Void> {
     return MainQueuePromise.run(coordinator.play)
   }
@@ -71,5 +77,13 @@ final class HybridTtsSession: HybridTtsSessionSpec {
     listener: @escaping (String) -> Void
   ) throws -> ListenerSubscription {
     return ListenerSubscription(remove: coordinator.addErrorListener(listener))
+  }
+
+  func addOnQueueLowListener(
+    listener: @escaping (Double) -> Void
+  ) throws -> ListenerSubscription {
+    return ListenerSubscription(
+      remove: coordinator.addQueueLowListener(listener)
+    )
   }
 }

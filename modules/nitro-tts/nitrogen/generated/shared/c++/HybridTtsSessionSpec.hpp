@@ -69,6 +69,7 @@ namespace margelo::nitro::nitrotts {
     public:
       // Methods
       virtual std::shared_ptr<Promise<void>> load(const std::vector<TtsParagraph>& paragraphs, double initialIndex, const TtsMetadata& metadata, const TtsSettings& settings) = 0;
+      virtual std::shared_ptr<Promise<void>> appendParagraphs(const std::vector<TtsParagraph>& paragraphs) = 0;
       virtual std::shared_ptr<Promise<void>> play() = 0;
       virtual std::shared_ptr<Promise<void>> pause() = 0;
       virtual std::shared_ptr<Promise<void>> stop() = 0;
@@ -80,6 +81,7 @@ namespace margelo::nitro::nitrotts {
       virtual ListenerSubscription addOnStateChangedListener(const std::function<void(TtsPlaybackState /* state */)>& listener) = 0;
       virtual ListenerSubscription addOnProgressChangedListener(const std::function<void(const TtsProgress& /* progress */)>& listener) = 0;
       virtual ListenerSubscription addOnErrorListener(const std::function<void(const std::string& /* message */)>& listener) = 0;
+      virtual ListenerSubscription addOnQueueLowListener(const std::function<void(double /* remaining */)>& listener) = 0;
 
     protected:
       // Hybrid Setup

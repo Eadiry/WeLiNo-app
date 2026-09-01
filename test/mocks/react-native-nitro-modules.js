@@ -1,6 +1,7 @@
 const mockSubscription = { remove: jest.fn() };
 const mockTtsSession = {
   load: jest.fn(async () => undefined),
+  appendParagraphs: jest.fn(async () => undefined),
   play: jest.fn(async () => undefined),
   pause: jest.fn(async () => undefined),
   stop: jest.fn(async () => undefined),
@@ -12,6 +13,7 @@ const mockTtsSession = {
   addOnStateChangedListener: jest.fn(() => mockSubscription),
   addOnProgressChangedListener: jest.fn(() => mockSubscription),
   addOnErrorListener: jest.fn(() => mockSubscription),
+  addOnQueueLowListener: jest.fn(() => mockSubscription),
 };
 
 jest.mock('react-native-nitro-modules', () => ({

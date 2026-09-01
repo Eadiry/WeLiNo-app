@@ -18,8 +18,8 @@ public extension TtsParagraph {
   /**
    * Create a new instance of `TtsParagraph`.
    */
-  init(id: String, text: String) {
-    self.init(std.string(id), std.string(text))
+  init(id: String, text: String, chapterId: String, chapterName: String) {
+    self.init(std.string(id), std.string(text), std.string(chapterId), std.string(chapterName))
   }
 
   @inline(__always)
@@ -30,5 +30,15 @@ public extension TtsParagraph {
   @inline(__always)
   var text: String {
     return String(self.__text)
+  }
+  
+  @inline(__always)
+  var chapterId: String {
+    return String(self.__chapterId)
+  }
+  
+  @inline(__always)
+  var chapterName: String {
+    return String(self.__chapterName)
   }
 }

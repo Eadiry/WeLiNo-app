@@ -8,6 +8,8 @@ npm-debug.*
 *.mobileprovision
 *.orig.*
 web-build/
+# Nitro module TS build output — the app imports the modules' src/ directly.
+modules/*/lib/
 .*env
 .env.local
 reader_playground/index.html

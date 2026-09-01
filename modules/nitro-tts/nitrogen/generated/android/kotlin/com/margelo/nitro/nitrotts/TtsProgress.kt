@@ -26,7 +26,10 @@ data class TtsProgress(
   val total: Double,
   @DoNotStrip
   @Keep
-  val paragraphId: String
+  val paragraphId: String,
+  @DoNotStrip
+  @Keep
+  val chapterId: String
 ) {
   /* primary constructor */
 
@@ -36,13 +39,15 @@ data class TtsProgress(
     return Objects.deepEquals(this.index, other.index)
       && Objects.deepEquals(this.total, other.total)
       && Objects.deepEquals(this.paragraphId, other.paragraphId)
+      && Objects.deepEquals(this.chapterId, other.chapterId)
   }
 
   override fun hashCode(): Int {
     return arrayOf<Any?>(
       index,
       total,
-      paragraphId
+      paragraphId,
+      chapterId
     ).contentDeepHashCode()
   }
 
@@ -54,8 +59,8 @@ data class TtsProgress(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(index: Double, total: Double, paragraphId: String): TtsProgress {
-      return TtsProgress(index, total, paragraphId)
+    private fun fromCpp(index: Double, total: Double, paragraphId: String, chapterId: String): TtsProgress {
+      return TtsProgress(index, total, paragraphId, chapterId)
     }
   }
 }

@@ -35,9 +35,15 @@ namespace margelo::nitro::nitrotts {
       jni::local_ref<jni::JString> id = this->getFieldValue(fieldId);
       static const auto fieldText = clazz->getField<jni::JString>("text");
       jni::local_ref<jni::JString> text = this->getFieldValue(fieldText);
+      static const auto fieldChapterId = clazz->getField<jni::JString>("chapterId");
+      jni::local_ref<jni::JString> chapterId = this->getFieldValue(fieldChapterId);
+      static const auto fieldChapterName = clazz->getField<jni::JString>("chapterName");
+      jni::local_ref<jni::JString> chapterName = this->getFieldValue(fieldChapterName);
       return TtsParagraph(
         id->toStdString(),
-        text->toStdString()
+        text->toStdString(),
+        chapterId->toStdString(),
+        chapterName->toStdString()
       );
     }
 
@@ -47,13 +53,15 @@ namespace margelo::nitro::nitrotts {
      */
     [[maybe_unused]]
     static jni::local_ref<JTtsParagraph::javaobject> fromCpp(const TtsParagraph& value) {
-      using JSignature = JTtsParagraph(jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
+      using JSignature = JTtsParagraph(jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
         clazz,
         jni::make_jstring(value.id),
-        jni::make_jstring(value.text)
+        jni::make_jstring(value.text),
+        jni::make_jstring(value.chapterId),
+        jni::make_jstring(value.chapterName)
       );
     }
   };

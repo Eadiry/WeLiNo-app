@@ -19,6 +19,7 @@ internal object TtsPlaybackStore {
     private val stateListeners = TtsListenerRegistry<TtsPlaybackState>()
     private val progressListeners = TtsListenerRegistry<TtsProgress>()
     private val errorListeners = TtsListenerRegistry<String>()
+    private val queueLowListeners = TtsListenerRegistry<Double>()
     private val snapshotListeners = TtsListenerRegistry<TtsPlaybackSnapshot>()
     private val pendingInitialization = mutableListOf<(Result<Unit>) -> Unit>()
 
@@ -336,6 +337,21 @@ internal object TtsPlaybackStore {
         return errorListeners.add(listener)
     }
 
+    /**
+     * Continuous cross-chapter playback (iOS). On Android the current JS path
+     * never calls this; kept so the shared spec compiles and a future Android
+     * implementation can hang off it.
+     */
+    fun addQueueLowListener(listener: (Double) -> Unit): () -> Unit {
+        return queueLowListeners.add(listener)
+    }
+
+    fun append(next: Array<TtsParagraph>) {
+        val readable = next.filter { it.text.isNotBlank() }
+        if (readable.isEmpty() || paragraphs.isEmpty()) return
+        paragraphs = paragraphs + readable
+    }
+
     fun addSnapshotListener(listener: (TtsPlaybackSnapshot) -> Unit): () -> Unit {
         listener(snapshot())
         return snapshotListeners.add(listener)
@@ -444,6 +460,7 @@ internal object TtsPlaybackStore {
             index = currentIndex.toDouble(),
             total = paragraphs.size.toDouble(),
             paragraphId = paragraph.id,
+            chapterId = paragraph.chapterId,
         )
     }
 

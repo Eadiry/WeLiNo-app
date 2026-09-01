@@ -55,6 +55,7 @@ namespace margelo::nitro::nitrotts {
   public:
     // Methods
     std::shared_ptr<Promise<void>> load(const std::vector<TtsParagraph>& paragraphs, double initialIndex, const TtsMetadata& metadata, const TtsSettings& settings) override;
+    std::shared_ptr<Promise<void>> appendParagraphs(const std::vector<TtsParagraph>& paragraphs) override;
     std::shared_ptr<Promise<void>> play() override;
     std::shared_ptr<Promise<void>> pause() override;
     std::shared_ptr<Promise<void>> stop() override;
@@ -66,6 +67,7 @@ namespace margelo::nitro::nitrotts {
     ListenerSubscription addOnStateChangedListener(const std::function<void(TtsPlaybackState /* state */)>& listener) override;
     ListenerSubscription addOnProgressChangedListener(const std::function<void(const TtsProgress& /* progress */)>& listener) override;
     ListenerSubscription addOnErrorListener(const std::function<void(const std::string& /* message */)>& listener) override;
+    ListenerSubscription addOnQueueLowListener(const std::function<void(double /* remaining */)>& listener) override;
 
   private:
     jni::global_ref<JHybridTtsSessionSpec::JavaPart> _javaPart;

@@ -10,4 +10,6 @@ export interface TtsProgress {
   total: number;
   /** Stable identifier of the active paragraph. */
   paragraphId: string;
+  /** Id of the chapter the active paragraph belongs to (see {@linkcode TtsParagraph.chapterId}). */
+  chapterId: string;
 }

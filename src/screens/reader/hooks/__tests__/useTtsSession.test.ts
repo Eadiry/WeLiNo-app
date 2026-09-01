@@ -1,7 +1,16 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { Tts, type TtsSession } from '@modules/nitro-tts';
+import { ChapterInfo, NovelInfo } from '@database/types';
+import { extractChapterParagraphs } from '@services/tts/chapterParagraphs';
 import { useTtsSession } from '../useTtsSession';
+
+// Keeps `sanitize-html` / `cheerio` out of this hook test's module graph.
+jest.mock('@services/tts/chapterParagraphs', () => ({
+  extractChapterParagraphs: jest.fn(async () => []),
+}));
+
+const mockExtract = extractChapterParagraphs as jest.Mock;
 
 const getNativeSession = async (): Promise<jest.Mocked<TtsSession>> => {
   const createSession = Tts.createSession as jest.Mock;
@@ -22,7 +31,10 @@ describe('useTtsSession', () => {
 
     await act(async () => {
       await result.current.loadAndPlay(
-        ['First paragraph', 'Second paragraph'],
+        [
+          { id: '0', text: 'First paragraph' },
+          { id: '1', text: 'Second paragraph' },
+        ],
         1,
         {
           novelName: 'Novel',
@@ -37,8 +49,18 @@ describe('useTtsSession', () => {
 
     expect(session.load).toHaveBeenCalledWith(
       [
-        { id: '0', text: 'First paragraph' },
-        { id: '1', text: 'Second paragraph' },
+        {
+          id: '0',
+          text: 'First paragraph',
+          chapterId: '',
+          chapterName: 'Chapter',
+        },
+        {
+          id: '1',
+          text: 'Second paragraph',
+          chapterId: '',
+          chapterName: 'Chapter',
+        },
       ],
       1,
       {
@@ -72,6 +94,51 @@ describe('useTtsSession', () => {
       expect(session.pause).toHaveBeenCalledTimes(1);
       expect(session.skipNext).toHaveBeenCalledTimes(1);
       expect(session.seekTo).toHaveBeenCalledWith(3);
+    });
+  });
+
+  it('appends the next chapter when the native queue runs low', async () => {
+    const { result } = renderHook(useTtsSession);
+    const session = await getNativeSession();
+
+    const nextChapter = { id: 6, name: 'Chapter 6' } as ChapterInfo;
+    const getChapterAfter = jest
+      .fn<Promise<ChapterInfo | undefined>, [string]>()
+      .mockResolvedValueOnce(nextChapter)
+      .mockResolvedValue(undefined);
+    mockExtract.mockResolvedValue([{ id: '6:0', text: 'Sixth chapter' }]);
+
+    await act(async () => {
+      await result.current.loadAndPlay(
+        [{ id: '5:0', text: 'Fifth chapter' }],
+        0,
+        { novelName: 'Novel', chapterName: 'Chapter 5' },
+        { rate: 1, pitch: 1 },
+        '5',
+        {
+          novel: { pluginId: 'p', name: 'Novel' } as NovelInfo,
+          chapter: { id: 5, name: 'Chapter 5' } as ChapterInfo,
+          getChapterAfter,
+          onChapterCrossed: jest.fn(),
+        },
+      );
+    });
+
+    // Fire the "queue low" callback the hook registered with the session.
+    const queueLowListener = session.addOnQueueLowListener.mock.calls[0][0];
+    await act(async () => {
+      queueLowListener(4);
+    });
+
+    await waitFor(() => {
+      expect(session.appendParagraphs).toHaveBeenCalledWith([
+        {
+          id: '6:0',
+          text: 'Sixth chapter',
+          chapterId: '6',
+          chapterName: 'Chapter 6',
+        },
+      ]);
     });
   });
 

@@ -15,6 +15,7 @@ namespace margelo::nitro::nitrotts {
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridMethod("load", &HybridTtsSessionSpec::load);
+      prototype.registerHybridMethod("appendParagraphs", &HybridTtsSessionSpec::appendParagraphs);
       prototype.registerHybridMethod("play", &HybridTtsSessionSpec::play);
       prototype.registerHybridMethod("pause", &HybridTtsSessionSpec::pause);
       prototype.registerHybridMethod("stop", &HybridTtsSessionSpec::stop);
@@ -26,6 +27,7 @@ namespace margelo::nitro::nitrotts {
       prototype.registerHybridMethod("addOnStateChangedListener", &HybridTtsSessionSpec::addOnStateChangedListener);
       prototype.registerHybridMethod("addOnProgressChangedListener", &HybridTtsSessionSpec::addOnProgressChangedListener);
       prototype.registerHybridMethod("addOnErrorListener", &HybridTtsSessionSpec::addOnErrorListener);
+      prototype.registerHybridMethod("addOnQueueLowListener", &HybridTtsSessionSpec::addOnQueueLowListener);
     });
   }
 

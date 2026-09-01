@@ -41,10 +41,12 @@ namespace margelo::nitro::nitrotts {
   public:
     std::string id     SWIFT_PRIVATE;
     std::string text     SWIFT_PRIVATE;
+    std::string chapterId     SWIFT_PRIVATE;
+    std::string chapterName     SWIFT_PRIVATE;
 
   public:
     TtsParagraph() = default;
-    explicit TtsParagraph(std::string id, std::string text): id(id), text(text) {}
+    explicit TtsParagraph(std::string id, std::string text, std::string chapterId, std::string chapterName): id(id), text(text), chapterId(chapterId), chapterName(chapterName) {}
 
   public:
     friend bool operator==(const TtsParagraph& lhs, const TtsParagraph& rhs) = default;
@@ -61,13 +63,17 @@ namespace margelo::nitro {
       jsi::Object obj = arg.asObject(runtime);
       return margelo::nitro::nitrotts::TtsParagraph(
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "id"))),
-        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "text")))
+        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "text"))),
+        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "chapterId"))),
+        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "chapterName")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::nitrotts::TtsParagraph& arg) {
       jsi::Object obj(runtime);
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "id"), JSIConverter<std::string>::toJSI(runtime, arg.id));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "text"), JSIConverter<std::string>::toJSI(runtime, arg.text));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "chapterId"), JSIConverter<std::string>::toJSI(runtime, arg.chapterId));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "chapterName"), JSIConverter<std::string>::toJSI(runtime, arg.chapterName));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -80,6 +86,8 @@ namespace margelo::nitro {
       }
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "id")))) return false;
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "text")))) return false;
+      if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "chapterId")))) return false;
+      if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "chapterName")))) return false;
       return true;
     }
   };

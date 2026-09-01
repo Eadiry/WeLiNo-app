@@ -35,6 +35,10 @@ abstract class HybridTtsSessionSpec: HybridObject() {
   
   @DoNotStrip
   @Keep
+  abstract fun appendParagraphs(paragraphs: Array<TtsParagraph>): Promise<Unit>
+  
+  @DoNotStrip
+  @Keep
   abstract fun play(): Promise<Unit>
   
   @DoNotStrip
@@ -89,6 +93,15 @@ abstract class HybridTtsSessionSpec: HybridObject() {
   @Keep
   private fun addOnErrorListener_cxx(listener: Func_void_std__string): ListenerSubscription {
     val __result = addOnErrorListener(listener)
+    return __result
+  }
+  
+  abstract fun addOnQueueLowListener(listener: (remaining: Double) -> Unit): ListenerSubscription
+  
+  @DoNotStrip
+  @Keep
+  private fun addOnQueueLowListener_cxx(listener: Func_void_double): ListenerSubscription {
+    val __result = addOnQueueLowListener(listener)
     return __result
   }
 

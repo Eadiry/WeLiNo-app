@@ -105,6 +105,12 @@ export default function useChapter(
   const hiddenRef = useRef(hidden);
   /** Increments on every load so a superseded load can never publish state. */
   const loadIdRef = useRef(0);
+  /**
+   * Set when a chapter change was driven by TTS narration crossing a boundary,
+   * so the reader does not tear down the (native, still-playing) session.
+   * Consumed by `WebViewReader`.
+   */
+  const ttsDrivenChapterChangeRef = useRef(false);
 
   useEffect(() => {
     chapterRef.current = chapter;
@@ -370,6 +376,51 @@ export default function useChapter(
     [loadChapterHtml, resolveAdjacentChapters],
   );
 
+  /**
+   * The chapter that follows `afterChapterId` in reading order. Used by the
+   * TTS session to buffer chapters ahead of what is being spoken.
+   */
+  const getChapterAfter = useCallback(
+    async (afterChapterId: string): Promise<ChapterInfo | undefined> => {
+      const from = await getDbChapter(Number(afterChapterId));
+      if (!from || from.position == null) {
+        return undefined;
+      }
+      return getNextChapter(
+        from.novelId,
+        from.position,
+        from.page ?? '',
+        excludedScanlatorsRef.current || [],
+      );
+    },
+    [],
+  );
+
+  /**
+   * Narration crossed into `chapterId`. Move the reader there without stopping
+   * the (native, still-playing) session, and mark the chapter it left read.
+   */
+  const setChapterFromTts = useCallback(
+    async (chapterId: string) => {
+      const id = Number(chapterId);
+      if (!Number.isFinite(id) || id === chapterRef.current.id) {
+        return;
+      }
+      const leaving = chapterRef.current.id;
+      const row = await getDbChapter(id);
+      if (!row) {
+        return;
+      }
+      if (!incognitoMode) {
+        updateChapterProgress(leaving, 100);
+        markChapterRead(leaving);
+      }
+      ttsDrivenChapterChangeRef.current = true;
+      await getChapter(row);
+    },
+    [getChapter, incognitoMode, markChapterRead, updateChapterProgress],
+  );
+
   const searchChapterText = useCallback(
     (text: string) => {
       webViewRef.current?.injectJavaScript(
@@ -553,6 +604,9 @@ export default function useChapter(
       setChapter,
       setLoading,
       getChapter,
+      getChapterAfter,
+      setChapterFromTts,
+      ttsDrivenChapterChangeRef,
       onUserInteraction,
       isTTSReadingRef,
     }),
@@ -571,6 +625,8 @@ export default function useChapter(
       clearChapterSearch,
       refetch,
       getChapter,
+      getChapterAfter,
+      setChapterFromTts,
       onUserInteraction,
       isTTSReadingRef,
     ],

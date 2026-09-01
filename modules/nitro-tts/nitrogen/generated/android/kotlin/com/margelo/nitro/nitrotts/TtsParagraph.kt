@@ -23,7 +23,13 @@ data class TtsParagraph(
   val id: String,
   @DoNotStrip
   @Keep
-  val text: String
+  val text: String,
+  @DoNotStrip
+  @Keep
+  val chapterId: String,
+  @DoNotStrip
+  @Keep
+  val chapterName: String
 ) {
   /* primary constructor */
 
@@ -32,12 +38,16 @@ data class TtsParagraph(
     if (other !is TtsParagraph) return false
     return Objects.deepEquals(this.id, other.id)
       && Objects.deepEquals(this.text, other.text)
+      && Objects.deepEquals(this.chapterId, other.chapterId)
+      && Objects.deepEquals(this.chapterName, other.chapterName)
   }
 
   override fun hashCode(): Int {
     return arrayOf<Any?>(
       id,
-      text
+      text,
+      chapterId,
+      chapterName
     ).contentDeepHashCode()
   }
 
@@ -49,8 +59,8 @@ data class TtsParagraph(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(id: String, text: String): TtsParagraph {
-      return TtsParagraph(id, text)
+    private fun fromCpp(id: String, text: String, chapterId: String, chapterName: String): TtsParagraph {
+      return TtsParagraph(id, text, chapterId, chapterName)
     }
   }
 }

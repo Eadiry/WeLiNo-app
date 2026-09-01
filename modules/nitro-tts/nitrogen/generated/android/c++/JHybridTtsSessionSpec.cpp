@@ -44,6 +44,7 @@ namespace margelo::nitro::nitrotts { struct TtsProgress; }
 #include "JFunc_void_TtsProgress.hpp"
 #include "JTtsProgress.hpp"
 #include "JFunc_void_std__string.hpp"
+#include "JFunc_void_double.hpp"
 
 namespace margelo::nitro::nitrotts {
 
@@ -90,6 +91,30 @@ namespace margelo::nitro::nitrotts {
       }
       return __array;
     }(paragraphs), initialIndex, JTtsMetadata::fromCpp(metadata), JTtsSettings::fromCpp(settings));
+    return [&]() {
+      auto __promise = Promise<void>::create();
+      __result->cthis()->addOnResolvedListener([=](const jni::alias_ref<jni::JObject>& /* unit */) {
+        __promise->resolve();
+      });
+      __result->cthis()->addOnRejectedListener([=](const jni::alias_ref<jni::JThrowable>& __throwable) {
+        jni::JniException __jniError(__throwable);
+        __promise->reject(std::make_exception_ptr(__jniError));
+      });
+      return __promise;
+    }();
+  }
+  std::shared_ptr<Promise<void>> JHybridTtsSessionSpec::appendParagraphs(const std::vector<TtsParagraph>& paragraphs) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JArrayClass<JTtsParagraph>> /* paragraphs */)>("appendParagraphs");
+    auto __result = method(_javaPart, [&](auto&& __input) {
+      size_t __size = __input.size();
+      jni::local_ref<jni::JArrayClass<JTtsParagraph>> __array = jni::JArrayClass<JTtsParagraph>::newArray(__size);
+      for (size_t __i = 0; __i < __size; __i++) {
+        const auto& __element = __input[__i];
+        auto __elementJni = JTtsParagraph::fromCpp(__element);
+        __array->setElement(__i, *__elementJni);
+      }
+      return __array;
+    }(paragraphs));
     return [&]() {
       auto __promise = Promise<void>::create();
       __result->cthis()->addOnResolvedListener([=](const jni::alias_ref<jni::JObject>& /* unit */) {
@@ -235,6 +260,11 @@ namespace margelo::nitro::nitrotts {
   ListenerSubscription JHybridTtsSessionSpec::addOnErrorListener(const std::function<void(const std::string& /* message */)>& listener) {
     static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JListenerSubscription>(jni::alias_ref<JFunc_void_std__string::javaobject> /* listener */)>("addOnErrorListener_cxx");
     auto __result = method(_javaPart, JFunc_void_std__string_cxx::fromCpp(listener));
+    return __result->toCpp();
+  }
+  ListenerSubscription JHybridTtsSessionSpec::addOnQueueLowListener(const std::function<void(double /* remaining */)>& listener) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JListenerSubscription>(jni::alias_ref<JFunc_void_double::javaobject> /* listener */)>("addOnQueueLowListener_cxx");
+    auto __result = method(_javaPart, JFunc_void_double_cxx::fromCpp(listener));
     return __result->toCpp();
   }
 

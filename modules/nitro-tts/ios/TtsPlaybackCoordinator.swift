@@ -9,7 +9,13 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
   private let stateListeners = TtsListenerRegistry<TtsPlaybackState>()
   private let progressListeners = TtsListenerRegistry<TtsProgress>()
   private let errorListeners = TtsListenerRegistry<String>()
+  private let queueLowListeners = TtsListenerRegistry<Double>()
   private let nowPlaying = TtsNowPlayingController()
+
+  /// Emit `onQueueLow` once the tail is this short so JS can fetch + append the
+  /// next chapter before playback runs out.
+  private let queueLowThreshold = 16
+  private var queueLowSignalled = false
 
   private var paragraphs: [TtsParagraph] = []
   private var currentIndex = 0
@@ -99,8 +105,43 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     metadata = nextMetadata
     settings = nextSettings
     state = .paused
+    queueLowSignalled = false
     emitProgress()
     emitState()
+    maybeSignalQueueLow()
+  }
+
+  /// Adds more paragraphs (usually the next chapter) to the tail of the queue
+  /// so native playback keeps going without JS. Revives a finished queue.
+  func append(_ incoming: [TtsParagraph]) {
+    precondition(Thread.isMainThread)
+    let readable = incoming.filter {
+      !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    guard !readable.isEmpty, metadata != nil else { return }
+
+    let wasFinished = state == .completed || state == .idle
+    paragraphs.append(contentsOf: readable)
+    queueLowSignalled = false
+
+    if wasFinished, currentIndex < paragraphs.count - 1 {
+      currentIndex += 1
+      speakCurrent()
+    } else {
+      emitProgress()
+    }
+  }
+
+  func addQueueLowListener(_ listener: @escaping (Double) -> Void) -> () -> Void {
+    return queueLowListeners.add(listener)
+  }
+
+  private func maybeSignalQueueLow() {
+    guard !queueLowSignalled else { return }
+    let remaining = paragraphs.count - currentIndex - 1
+    guard remaining >= 0, remaining <= queueLowThreshold else { return }
+    queueLowSignalled = true
+    queueLowListeners.emit(Double(remaining))
   }
 
   func play() {
@@ -216,6 +257,7 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     } else {
       currentIndex += 1
       speakCurrent()
+      maybeSignalQueueLow()
     }
   }
 
@@ -240,6 +282,15 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     let paragraph = paragraphs[currentIndex]
+    // Keep the lock-screen / media title on the chapter now being read.
+    if let current = metadata, current.chapterName != paragraph.chapterName,
+       !paragraph.chapterName.isEmpty {
+      metadata = TtsMetadata(
+        novelName: current.novelName,
+        chapterName: paragraph.chapterName,
+        coverUri: current.coverUri
+      )
+    }
     let utterance = AVSpeechUtterance(string: paragraph.text)
     utterance.rate = (
       Float(settings.rate) * AVSpeechUtteranceDefaultSpeechRate
@@ -299,7 +350,8 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     return TtsProgress(
       index: Double(currentIndex),
       total: Double(paragraphs.count),
-      paragraphId: paragraphs[currentIndex].id
+      paragraphId: paragraphs[currentIndex].id,
+      chapterId: paragraphs[currentIndex].chapterId
     )
   }
 }

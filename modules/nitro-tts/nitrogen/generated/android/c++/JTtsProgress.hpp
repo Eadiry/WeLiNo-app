@@ -37,10 +37,13 @@ namespace margelo::nitro::nitrotts {
       double total = this->getFieldValue(fieldTotal);
       static const auto fieldParagraphId = clazz->getField<jni::JString>("paragraphId");
       jni::local_ref<jni::JString> paragraphId = this->getFieldValue(fieldParagraphId);
+      static const auto fieldChapterId = clazz->getField<jni::JString>("chapterId");
+      jni::local_ref<jni::JString> chapterId = this->getFieldValue(fieldChapterId);
       return TtsProgress(
         index,
         total,
-        paragraphId->toStdString()
+        paragraphId->toStdString(),
+        chapterId->toStdString()
       );
     }
 
@@ -50,14 +53,15 @@ namespace margelo::nitro::nitrotts {
      */
     [[maybe_unused]]
     static jni::local_ref<JTtsProgress::javaobject> fromCpp(const TtsProgress& value) {
-      using JSignature = JTtsProgress(double, double, jni::alias_ref<jni::JString>);
+      using JSignature = JTtsProgress(double, double, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
         clazz,
         value.index,
         value.total,
-        jni::make_jstring(value.paragraphId)
+        jni::make_jstring(value.paragraphId),
+        jni::make_jstring(value.chapterId)
       );
     }
   };

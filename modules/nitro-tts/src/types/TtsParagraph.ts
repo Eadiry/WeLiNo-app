@@ -8,4 +8,12 @@ export interface TtsParagraph {
   id: string;
   /** Text sent to the selected native speech voice. */
   text: string;
+  /**
+   * Id of the chapter this paragraph belongs to. Lets one native queue span
+   * several chapters so playback continues across chapter boundaries without
+   * the (background-frozen) WebView.
+   */
+  chapterId: string;
+  /** Chapter title, shown on the lock-screen / media controls at a crossing. */
+  chapterName: string;
 }

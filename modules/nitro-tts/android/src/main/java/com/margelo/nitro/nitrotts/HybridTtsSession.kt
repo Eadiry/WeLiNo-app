@@ -23,6 +23,11 @@ final class HybridTtsSession : HybridTtsSessionSpec() {
         }
     }
 
+    override fun appendParagraphs(
+        paragraphs: Array<TtsParagraph>,
+    ): Promise<Unit> =
+        MainThreadPromise.run { TtsPlaybackStore.append(paragraphs) }
+
     override fun play(): Promise<Unit> =
         MainThreadPromise.run(TtsPlaybackStore::play)
 
@@ -63,5 +68,13 @@ final class HybridTtsSession : HybridTtsSessionSpec() {
         listener: (message: String) -> Unit,
     ): ListenerSubscription {
         return ListenerSubscription(TtsPlaybackStore.addErrorListener(listener))
+    }
+
+    override fun addOnQueueLowListener(
+        listener: (remaining: Double) -> Unit,
+    ): ListenerSubscription {
+        return ListenerSubscription(
+            TtsPlaybackStore.addQueueLowListener(listener),
+        )
     }
 }

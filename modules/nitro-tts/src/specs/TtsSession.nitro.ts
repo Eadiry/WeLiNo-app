@@ -23,6 +23,13 @@ export interface TtsSession
     settings: TtsSettings,
   ): Promise<void>;
 
+  /**
+   * Appends paragraphs to the end of the active queue so playback continues
+   * past the current chapter without JS. Revives a queue that had already
+   * finished. No-op when nothing is loaded.
+   */
+  appendParagraphs(paragraphs: TtsParagraph[]): Promise<void>;
+
   /** Starts or resumes playback. */
   play(): Promise<void>;
 
@@ -65,4 +72,13 @@ export interface TtsSession
    * Observes native playback failures.
    */
   addOnErrorListener(listener: (message: string) => void): ListenerSubscription;
+
+  /**
+   * Fires when the tail of the queue is running short, so JS can fetch the
+   * next chapter and {@linkcode TtsSession.appendParagraphs}. `remaining` is
+   * the number of paragraphs left after the active one.
+   */
+  addOnQueueLowListener(
+    listener: (remaining: number) => void,
+  ): ListenerSubscription;
 }

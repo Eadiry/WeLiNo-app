@@ -190,7 +190,7 @@ const SettingsReaderWebView = ({
             const startIndex =
               typeof payload?.startIndex === 'number' ? payload.startIndex : 0;
             void loadAndPlay(
-              queue,
+              queue.map((text, index) => ({ id: String(index), text })),
               startIndex,
               {
                 novelName: novel.name,

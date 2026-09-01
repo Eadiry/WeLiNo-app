@@ -110,5 +110,13 @@ namespace margelo::nitro::nitrotts::bridge::swift {
       swiftClosure.call(message);
     };
   }
+  
+  // pragma MARK: std::function<void(double /* remaining */)>
+  Func_void_double create_Func_void_double(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = NitroTts::Func_void_double::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](double remaining) mutable -> void {
+      swiftClosure.call(remaining);
+    };
+  }
 
 } // namespace margelo::nitro::nitrotts::bridge::swift

@@ -332,8 +332,36 @@ window.tts = new (function () {
       data: {
         queue: this.textQueue,
         startIndex,
+        chapterId: String(reader.chapter.id),
       },
     });
+  };
+
+  /**
+   * Highlight the paragraph the native queue is on. Ids are `"<chapterId>:<n>"`
+   * because the queue can span several chapters — ignore ids that aren't in
+   * the chapter currently on screen (the UI catches up on the crossing).
+   */
+  this.setActiveByParagraphId = id => {
+    if (typeof id !== 'string') return;
+    const sep = id.lastIndexOf(':');
+    if (sep < 0) return;
+    if (id.slice(0, sep) !== String(reader.chapter.id)) return;
+    const index = parseInt(id.slice(sep + 1), 10);
+    if (!Number.isFinite(index)) return;
+
+    // Build the element list lazily so highlighting works after a crossing,
+    // before start() has run in this chapter.
+    if (!this.allReadableElements || !this.allReadableElements.length) {
+      const entries = this.getAllReadableElements(reader.chapterElement)
+        .map(el => ({ element: el, text: this.normalizeText(el.innerText) }))
+        .filter(entry => !!entry.text);
+      this.allReadableElements = entries.map(entry => entry.element);
+      this.textQueue = entries.map(entry => entry.text);
+      this.totalElements = this.allReadableElements.length;
+    }
+    if (!this.allReadableElements.length) return;
+    this.setActiveIndex(index);
   };
 
   // Start narration from the paragraph currently on screen rather than the top
@@ -448,21 +476,11 @@ window.tts = new (function () {
   };
 
   this.complete = () => {
+    // Cross-chapter continuation is handled natively now (the queue spans
+    // several chapters). `complete` just means the native queue is fully
+    // exhausted — end of novel, or a look-ahead fetch failed — so reset the
+    // in-page TTS UI.
     this.reading = false;
-    // A completion event that arrives with nothing loaded/read is stray —
-    // typically it lands in the *new* chapter's context right after an
-    // auto-advance. Acting on it would advance again and skip a chapter.
-    if (this.totalElements === 0 || this.elementsRead === 0) {
-      this.reset();
-      return;
-    }
-    if (
-      reader.readerSettings.val.tts?.autoPageAdvance === true &&
-      reader.nextChapter
-    ) {
-      reader.post({ type: 'next', autoStartTTS: true });
-      return;
-    }
     this.reset();
   };
 

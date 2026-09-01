@@ -18,8 +18,8 @@ public extension TtsProgress {
   /**
    * Create a new instance of `TtsProgress`.
    */
-  init(index: Double, total: Double, paragraphId: String) {
-    self.init(index, total, std.string(paragraphId))
+  init(index: Double, total: Double, paragraphId: String, chapterId: String) {
+    self.init(index, total, std.string(paragraphId), std.string(chapterId))
   }
 
   @inline(__always)
@@ -35,5 +35,10 @@ public extension TtsProgress {
   @inline(__always)
   var paragraphId: String {
     return String(self.__paragraphId)
+  }
+  
+  @inline(__always)
+  var chapterId: String {
+    return String(self.__chapterId)
   }
 }
