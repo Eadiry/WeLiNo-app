@@ -266,6 +266,23 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
 2. **Text pipeline** before `load()`: persistent character-name substitution,
    offline MTL cleanup, LanguageTool deep-clean, CJK auto-romanisation.
    Port from the Capacitor WeLiNo repo (`src/pipeline/`, `src/substitution/`).
+3. **On-device Kokoro TTS** _(decided; do after Milestone 1 is signed off)_.
+   Kokoro-82M (Apache-2.0, ~54 voices) as a second synthesis engine alongside
+   `AVSpeechSynthesizer`, running **fully on the phone** — no API key, no
+   network, no per-use cost. Pieces:
+   - **Model**: `kokoro-v1.0` ONNX (quantized int8 ~90 MB) + `voices-v1.0.bin`
+     (~26 MB). Download on first use into app storage (don't bloat the IPA).
+   - **Inference**: `onnxruntime` for iOS (there's `onnxruntime-react-native`,
+     or a small Nitro/Expo native wrapper). Output is 24 kHz mono float PCM.
+   - **Phonemizer (the hard part)**: Kokoro takes phonemes, not text. Normally
+     espeak-ng (C) does G2P — needs cross-compiling for iOS, or a pure
+     JS/Swift G2P. Evaluate an espeak-ng iOS fork vs. a JS phonemizer.
+   - **Playback**: feed PCM to `AVAudioEngine`/`AVAudioPlayerNode`; synthesize
+     per-sentence chunks so playback can start fast and the paragraph queue +
+     lock-screen controls + background audio keep working. Slot into the same
+     coordinator as item 1.
+   - Reader TTS settings gain an engine picker (System vs Kokoro) + Kokoro
+     voice list.
 
 ## Reference
 
