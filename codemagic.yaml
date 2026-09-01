@@ -84,6 +84,13 @@ workflows:
             --build-type "Codemagic" \
             --node-env "production"
 
+      - name: Inline the WebView reader assets (iOS)
+        script: |
+          # LNReader loads assets/reader/{css,js} from file:///android_asset at
+          # runtime — Android-only. Regenerate the inlined TS module so the
+          # reader works on iOS (committed too; this keeps it in sync).
+          pnpm generate:reader-assets
+
       - name: Prepare ccache
         script: |
           brew list ccache >/dev/null 2>&1 || brew install ccache

@@ -28,7 +28,7 @@ import { sanitizeChapterText } from '../utils/sanitizeChapterText';
 import { parseChapterNumber } from '@utils/parseChapterNumber';
 import WebView from 'react-native-webview';
 import { useFullscreenMode } from '@hooks';
-import { Dimensions } from 'react-native';
+import { Dimensions, Platform } from 'react-native';
 import { runWhenIdle } from '@utils/runWhenIdle';
 import defaultTo from 'lodash-es/defaultTo';
 import { showToast } from '@utils/showToast';
@@ -61,7 +61,10 @@ export default function useChapter(
   } = useNovelActions();
   const novelSettings = useNovelValue('novelSettings');
 
-  const [hidden, setHidden] = useState(true);
+  // iOS has no hardware back button; the only way out of a chapter is the
+  // reader appbar. Start it visible there so there's always an escape hatch
+  // (a tap still toggles it). Android keeps its immersive-by-default behaviour.
+  const [hidden, setHidden] = useState(Platform.OS !== 'ios');
   const [chapter, setChapter] = useState(initialChapter);
   const [loading, setLoading] = useState(true);
   const [chapterText, setChapterText] = useState('');

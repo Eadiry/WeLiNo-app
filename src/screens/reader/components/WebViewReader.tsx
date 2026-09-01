@@ -2,9 +2,11 @@ import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   NativeEventEmitter,
   NativeModules,
+  Platform,
   StatusBar,
   StyleSheet,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WebView from 'react-native-webview';
 import * as Linking from 'expo-linking';
 import color from 'color';
@@ -37,6 +39,7 @@ import {
   isChapterRefreshUrl,
   isPluginIssueReportUrl,
 } from '../utils/sanitizeChapterText';
+import { READER_CSS, READER_SCRIPTS } from '../utils/readerAssets';
 
 export type WebViewPostEvent = {
   type: string;
@@ -120,10 +123,6 @@ const deviceInfoEmitter = new NativeEventEmitter(RNDeviceInfo);
  */
 let lastKnownBatteryLevel = 0;
 
-const assetsUriPrefix = __DEV__
-  ? 'http://localhost:8081/assets'
-  : 'file:///android_asset';
-
 const WebViewReader: React.FC<WebViewReaderProps> = ({
   onPress,
   onTouchStart,
@@ -144,6 +143,16 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
     refetch,
   } = useChapterContext();
   const theme = useTheme();
+  const { top: safeAreaTop, bottom: safeAreaBottom } = useSafeAreaInsets();
+  /**
+   * `StatusBar.currentHeight` is Android-only (undefined on iOS), so on iOS the
+   * page rendered flush to the top edge — under the notch / Dynamic Island.
+   * Use the measured safe-area inset there instead, and pad the bottom past
+   * the home indicator.
+   */
+  const readerTopInset =
+    Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : safeAreaTop;
+  const readerBottomInset = Platform.OS === 'android' ? 0 : safeAreaBottom;
   const initialReaderSettings = useMemo(
     () => ({
       ...initialChapterReaderSettings,
@@ -324,14 +333,12 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
         <!DOCTYPE html>
           <html dir="${readerDir}">
             <head>
-              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-              <link rel="stylesheet" href="${assetsUriPrefix}/css/index.css">
-              <link rel="stylesheet" href="${assetsUriPrefix}/css/pageReader.css">
-              <link rel="stylesheet" href="${assetsUriPrefix}/css/toolWrapper.css">
-              <link rel="stylesheet" href="${assetsUriPrefix}/css/tts.css">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+              <style id="ln-reader-assets">${READER_CSS}</style>
               <style>
               :root {
-                --StatusBar-currentHeight: ${StatusBar.currentHeight}px;
+                --StatusBar-currentHeight: ${readerTopInset}px;
+                --reader-bottom-inset: ${readerBottomInset}px;
                 --readerSettings-theme: ${initialReaderSettings.theme};
                 --readerSettings-padding: ${initialReaderSettings.padding}px;
                 --readerSettings-textSize: ${initialReaderSettings.textSize}px;
@@ -358,6 +365,9 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
                 --theme-onSurfaceVariant: ${theme.onSurfaceVariant};
                 --theme-outline: ${theme.outline};
                 --theme-rippleColor: ${theme.rippleColor};
+                }
+                body {
+                  padding-bottom: calc(40px + var(--reader-bottom-inset, 0px));
                 }
                 </style>
                 <style id="ln-font">
@@ -409,14 +419,7 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
                   },
                 })}
               </script>
-              <script src="${assetsUriPrefix}/js/polyfill-onscrollend.js"></script>
-              <script src="${assetsUriPrefix}/js/icons.js"></script>
-              <script src="${assetsUriPrefix}/js/van.js"></script>
-              <script src="${assetsUriPrefix}/js/text-vibe.js"></script>
-              <script src="${assetsUriPrefix}/js/core.js"></script>
-              <script src="${assetsUriPrefix}/js/search.js"></script>
-              <script src="${assetsUriPrefix}/js/index.js"></script>
-              <script src="${assetsUriPrefix}/js/textRemover.js"></script>
+              ${READER_SCRIPTS.map(s => `<script>${s}</script>`).join('\n')}
               <script src="${pluginCustomJS}"></script>
               <script id="ln-custom-js">
               function fn(){
@@ -434,43 +437,45 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
     chapter,
     chapterGeneralSettings,
     processedHtml,
-      customJS,
-      customCSS,
+    customJS,
+    customCSS,
     initialReaderSettings,
     novel,
     plugin,
     pluginCustomCSS,
     pluginCustomJS,
     readerDir,
+    readerTopInset,
+    readerBottomInset,
     theme,
   ]);
 
   return (
-      <>
-    <WebView
-      ref={webViewRef}
-      onTouchStart={onTouchStart}
-      style={{ backgroundColor: readerSettings.theme }}
-      allowFileAccess={true}
-      originWhitelist={['*']}
-      scalesPageToFit={true}
-      showsVerticalScrollIndicator={false}
-      javaScriptEnabled={true}
-      webviewDebuggingEnabled={__DEV__}
-      onShouldStartLoadWithRequest={({ url }) => {
-        if (isPluginIssueReportUrl(url)) {
-          void Linking.openURL(url);
-          return false;
-        }
-        if (isChapterRefreshUrl(url)) {
-          refetch();
-          return false;
-        }
-        return true;
-      }}
-      onLoadEnd={() => {
-        webViewRef.current?.injectJavaScript(
-          `if (window.reader && window.reader.batteryLevel) {
+    <>
+      <WebView
+        ref={webViewRef}
+        onTouchStart={onTouchStart}
+        style={{ backgroundColor: readerSettings.theme }}
+        allowFileAccess={true}
+        originWhitelist={['*']}
+        scalesPageToFit={true}
+        showsVerticalScrollIndicator={false}
+        javaScriptEnabled={true}
+        webviewDebuggingEnabled={__DEV__}
+        onShouldStartLoadWithRequest={({ url }) => {
+          if (isPluginIssueReportUrl(url)) {
+            void Linking.openURL(url);
+            return false;
+          }
+          if (isChapterRefreshUrl(url)) {
+            refetch();
+            return false;
+          }
+          return true;
+        }}
+        onLoadEnd={() => {
+          webViewRef.current?.injectJavaScript(
+            `if (window.reader && window.reader.batteryLevel) {
             window.reader.batteryLevel.val = ${lastKnownBatteryLevel};
           }`,
           );

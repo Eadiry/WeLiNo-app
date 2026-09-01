@@ -21,6 +21,7 @@ module.exports = defineConfig([
     'dist/**',
     'coverage/**',
     'assets/**',
+    'src/screens/reader/utils/readerAssets.ts',
   ]),
   expoConfig,
   ...compat
