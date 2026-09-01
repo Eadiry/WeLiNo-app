@@ -163,6 +163,36 @@ Still `file:///android_asset`: the `@font-face` for a custom reader font
 if the user picks Lora/Nunito/etc. — inline the one selected `.ttf` as a
 data: URI when we get to it.
 
+### Reader chrome redesigned _(done)_
+
+The reader UI was rebuilt to match a reference reading app:
+
+- **`ReaderAppbar`** — `✕` close / `headphones` (start TTS) / `Aa`
+  (`format-size`, opens the settings panel) / `download` / `⋮` (bookmark,
+  search, refresh, open-in-WebView/browser, share). Title moved to the footer.
+- **`ReaderSettingsPanel.tsx`** (new) — right slide-in sheet: text-size
+  steppers, Color / Font / Margins / Line Spacing dropdowns (named presets in
+  `readerConstants.ts`), "No Line Break" (`removeExtraParagraphSpacing`) and
+  "No Text Indent" (`removeTextIndent`, new `ChapterGeneralSettings` field)
+  switches, and a "More settings" row that opens the old `ReaderBottomSheetV2`.
+- **`ReaderFooter`** — progress % + draggable seek slider flanked by
+  prev/next-chapter chevrons; novel + chapter title; chapters button +
+  Scroll/Page segmented toggle (`pageReader`).
+- **`ChapterDrawer`** — "✕ Close Book" header + "Chapters" sub-header; read
+  chapters get a green `check-circle`; current row uses `theme.primary`;
+  zebra striping.
+- **`WebViewReader`** — new `--readerSettings-textIndent` /
+  `--readerSettings-paragraphGap` CSS vars drive `#LNReader-chapter p`
+  (first-line indent + blank line between paragraphs); pushed live via the
+  MMKV `CHAPTER_GENERAL_SETTINGS` listener. `onProgress` prop feeds the
+  footer seekbar; `ReaderScreen` injects `scrollTo` / `pageReader.movePage`
+  to seek.
+
+The per-chapter download button uses the normal `useDownload().downloadChapter`
+path, so on iOS it enqueues but does nothing until the background-task module
+is implemented (pre-existing limitation). No brightness slider (would need
+`expo-brightness`); no comments button (LNReader has no comments).
+
 ### Remaining 1.5 work
 
 Verify `nitro-tts` actually plays with the screen locked + lock-screen

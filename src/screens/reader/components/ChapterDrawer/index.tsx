@@ -160,9 +160,10 @@ const ChapterDrawer = ({ onClose }: ChapterDrawerProps) => {
   // Every prop here is stable for a given chapter, so unchanged rows can skip
   // re-rendering when the chapter list is rebuilt.
   const renderItem = useCallback(
-    ({ item }: { item: ChapterInfo }) => (
+    ({ item, index }: { item: ChapterInfo; index: number }) => (
       <RenderListChapter
         item={item}
+        index={index}
         styles={styles}
         theme={theme}
         chapterId={chapter.id}
@@ -200,7 +201,6 @@ const ChapterDrawer = ({ onClose }: ChapterDrawerProps) => {
   return (
     <View style={styles.drawer}>
       <View style={styles.headerCtn}>
-        <Text style={styles.headerTitle}>{getString('common.chapters')}</Text>
         {onClose ? (
           <IconButtonV2
             accessibilityLabel={getString('common.close')}
@@ -210,6 +210,14 @@ const ChapterDrawer = ({ onClose }: ChapterDrawerProps) => {
             theme={theme}
           />
         ) : null}
+        <Text style={styles.headerTitle}>
+          {getString('readerScreen.drawer.closeBook')}
+        </Text>
+      </View>
+      <View style={styles.subHeaderCtn}>
+        <Text style={styles.subHeaderTitle}>
+          {getString('common.chapters')}
+        </Text>
       </View>
       {currentScrollIndex === undefined ? (
         <LoadingScreenV2 theme={theme} />
@@ -259,11 +267,16 @@ const createStylesheet = (theme: ThemeColors, insets: EdgeInsets) => {
     button: {
       marginVertical: 4,
     },
+    chapterRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
     chapterCtn: {
       flex: 1,
       justifyContent: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 10,
     },
     chapterNameCtn: {
       color: theme.onSurface,
@@ -290,20 +303,29 @@ const createStylesheet = (theme: ThemeColors, insets: EdgeInsets) => {
     },
     headerCtn: {
       alignItems: 'center',
-      borderBottomColor: theme.outlineVariant,
-      borderBottomWidth: 1,
       flexDirection: 'row',
-      minHeight: 64,
-      paddingLeft: 16,
-      paddingRight: 4,
-      paddingVertical: 8,
+      minHeight: 56,
+      paddingLeft: 4,
+      paddingRight: 16,
+      paddingVertical: 4,
     },
     headerTitle: {
       color: theme.onSurface,
       flex: 1,
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: '600',
-      lineHeight: 28,
+      lineHeight: 24,
+      marginLeft: 4,
+    },
+    subHeaderCtn: {
+      backgroundColor: theme.surfaceVariant,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    subHeaderTitle: {
+      color: theme.onSurfaceVariant,
+      fontSize: 15,
+      fontWeight: '700',
     },
     listContent: {
       paddingBottom: 8,

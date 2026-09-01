@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { IconButton } from 'react-native-paper';
 import color from 'color';
 import Animated, {
@@ -8,13 +8,20 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useChapterContext } from '../ChapterContext';
-import { useTheme } from '@hooks/persisted';
+import { useChapterGeneralSettings, useTheme } from '@hooks/persisted';
 import { useNovelLayout } from '@screens/novel/NovelContext';
+import { Slider } from '@components';
+import { getString } from '@i18n/translations';
+import { ThemeColors } from '@theme/types';
 
 interface ChapterFooterProps {
-  openReaderSheet: () => void;
-  scrollToStart: () => void;
   openDrawer: () => void;
+  /** Reading progress, 0–100. */
+  progress: number;
+  /** Seek to a 0–1 position in the chapter. */
+  onSeek: (ratio: number) => void;
+  novelName: string;
+  chapterName: string;
 }
 
 const fastOutSlowIn = Easing.bezier(0.4, 0.0, 0.2, 1.0);
@@ -34,7 +41,7 @@ const createEntering = (navigationBarHeight: number) => () => {
     opacity: withTiming(1, { duration: 150 }),
   };
   const initialValues = {
-    transform: [{ translateY: 64 + navigationBarHeight }],
+    transform: [{ translateY: 160 + navigationBarHeight }],
     opacity: 0,
   };
   return { initialValues, animations };
@@ -45,7 +52,7 @@ const createExiting = (navigationBarHeight: number) => () => {
   const animations = {
     transform: [
       {
-        translateY: withTiming(64 + navigationBarHeight, {
+        translateY: withTiming(160 + navigationBarHeight, {
           duration: 250,
           easing: fastOutSlowIn,
           reduceMotion: ReduceMotion.System,
@@ -62,27 +69,28 @@ const createExiting = (navigationBarHeight: number) => () => {
 };
 
 const ChapterFooter = ({
-  openReaderSheet,
-  scrollToStart,
   openDrawer,
+  progress,
+  onSeek,
+  novelName,
+  chapterName,
 }: ChapterFooterProps) => {
   const { nextChapter, prevChapter, navigateChapter } = useChapterContext();
   const theme = useTheme();
-  const rippleConfig = {
-    color: theme.rippleColor,
-    borderless: true,
-    radius: 50,
-  };
+  const { pageReader = false, setChapterGeneralSettings } =
+    useChapterGeneralSettings();
   const { navigationBarHeight } = useNovelLayout();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const style = useMemo(
+  const containerStyle = useMemo(
     () => [
+      styles.footer,
       {
-        backgroundColor: color(theme.surface).alpha(0.9).string(),
-        paddingBottom: navigationBarHeight,
+        backgroundColor: color(theme.surface).alpha(0.95).string(),
+        paddingBottom: navigationBarHeight + 8,
       },
     ],
-    [theme.surface, navigationBarHeight],
+    [styles.footer, theme.surface, navigationBarHeight],
   );
 
   const entering = useMemo(
@@ -94,70 +102,91 @@ const ChapterFooter = ({
     [navigationBarHeight],
   );
 
+  const ratio = Math.min(1, Math.max(0, progress / 100));
+
   return (
-    <Animated.View
-      entering={entering}
-      exiting={exiting}
-      style={[styles.footer, style]}
-    >
-      <View style={styles.buttonsContainer}>
-        <Pressable
-          android_ripple={rippleConfig}
-          style={styles.buttonStyles}
+    <Animated.View entering={entering} exiting={exiting} style={containerStyle}>
+      <Text style={styles.percentage}>{Math.round(ratio * 100)}%</Text>
+      <View style={styles.seekRow}>
+        <IconButton
+          icon="chevron-left"
+          size={26}
+          disabled={!prevChapter}
+          iconColor={theme.onSurface}
           onPress={() => navigateChapter('PREV')}
-        >
-          <IconButton
-            icon="chevron-left"
-            size={26}
-            disabled={!prevChapter}
-            iconColor={theme.onSurface}
+        />
+        <View style={styles.slider}>
+          <Slider
+            size="xs"
+            value={ratio}
+            min={0}
+            max={1}
+            step={0.001}
+            onSlidingComplete={onSeek}
+            accessibilityLabel={getString(
+              'readerScreen.bottomSheet.showProgressPercentage',
+            )}
+            formatValue={v => `${Math.round(v * 100)}%`}
           />
-        </Pressable>
-        <Pressable
-          android_ripple={rippleConfig}
-          style={styles.buttonStyles}
-          onPress={() => scrollToStart()}
-        >
-          <IconButton
-            icon="arrow-collapse-up"
-            size={26}
-            iconColor={theme.onSurface}
-          />
-        </Pressable>
-        <Pressable
-          android_ripple={rippleConfig}
-          style={styles.buttonStyles}
-          onPress={() => openDrawer()}
-        >
-          <IconButton
-            icon="format-list-bulleted"
-            size={26}
-            iconColor={theme.onSurface}
-          />
-        </Pressable>
-        <Pressable
-          android_ripple={rippleConfig}
-          style={styles.buttonStyles}
-          onPress={openReaderSheet}
-        >
-          <IconButton
-            icon="cog-outline"
-            size={26}
-            iconColor={theme.onSurface}
-          />
-        </Pressable>
-        <Pressable
-          android_ripple={rippleConfig}
-          style={styles.buttonStyles}
+        </View>
+        <IconButton
+          icon="chevron-right"
+          size={26}
+          disabled={!nextChapter}
+          iconColor={theme.onSurface}
           onPress={() => navigateChapter('NEXT')}
-        >
-          <IconButton
-            icon="chevron-right"
-            size={26}
-            disabled={!nextChapter}
-            iconColor={theme.onSurface}
-          />
-        </Pressable>
+        />
+      </View>
+
+      <Text style={styles.novelName} numberOfLines={1}>
+        {novelName}
+      </Text>
+      <Text style={styles.chapterName} numberOfLines={1}>
+        {chapterName}
+      </Text>
+
+      <View style={styles.actionsRow}>
+        <IconButton
+          icon="format-list-bulleted"
+          size={24}
+          iconColor={theme.onSurface}
+          onPress={openDrawer}
+        />
+        <View style={styles.segment}>
+          <Pressable
+            style={[
+              styles.segmentItem,
+              !pageReader && { backgroundColor: theme.primary },
+            ]}
+            onPress={() => setChapterGeneralSettings({ pageReader: false })}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: !pageReader ? theme.onPrimary : theme.onSurface },
+              ]}
+            >
+              {getString('readerScreen.panel.scroll')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.segmentItem,
+              pageReader && { backgroundColor: theme.primary },
+            ]}
+            onPress={() => setChapterGeneralSettings({ pageReader: true })}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: pageReader ? theme.onPrimary : theme.onSurface },
+              ]}
+            >
+              {getString('readerScreen.panel.page')}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.actionsSpacer} />
       </View>
     </Animated.View>
   );
@@ -165,22 +194,63 @@ const ChapterFooter = ({
 
 export default React.memo(ChapterFooter);
 
-const styles = StyleSheet.create({
-  buttonStyles: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    paddingBottom: 4,
-    paddingVertical: 8,
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-  },
-  footer: {
-    bottom: 0,
-    flex: 1,
-    position: 'absolute',
-    width: '100%',
-    zIndex: 1,
-  },
-});
+const createStyles = (theme: ThemeColors) =>
+  StyleSheet.create({
+    footer: {
+      bottom: 0,
+      position: 'absolute',
+      width: '100%',
+      zIndex: 1,
+      paddingHorizontal: 12,
+      paddingTop: 8,
+    },
+    percentage: {
+      color: theme.onSurfaceVariant,
+      textAlign: 'center',
+      fontSize: 12,
+      marginBottom: 2,
+    },
+    seekRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    slider: {
+      flex: 1,
+      marginHorizontal: 4,
+    },
+    novelName: {
+      color: theme.onSurface,
+      textAlign: 'center',
+      fontSize: 14,
+      marginTop: 4,
+    },
+    chapterName: {
+      color: theme.onSurfaceVariant,
+      textAlign: 'center',
+      fontSize: 12,
+      marginBottom: 4,
+    },
+    actionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 4,
+    },
+    actionsSpacer: {
+      width: 48,
+    },
+    segment: {
+      flexDirection: 'row',
+      borderRadius: 20,
+      overflow: 'hidden',
+      backgroundColor: theme.surfaceVariant,
+    },
+    segmentItem: {
+      paddingVertical: 6,
+      paddingHorizontal: 20,
+    },
+    segmentText: {
+      fontSize: 13,
+      fontWeight: '600',
+    },
+  });

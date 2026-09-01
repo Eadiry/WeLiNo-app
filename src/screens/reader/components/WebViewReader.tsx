@@ -54,6 +54,7 @@ type WebViewReaderProps = {
   onTouchStart?(): void;
   onSearchResult(result: ReaderSearchResult): void;
   searchTextRef: React.MutableRefObject<string>;
+  onProgress?(progress: number): void;
 };
 
 const onLogMessage = (payload: { nativeEvent: { data: string } }) => {
@@ -128,6 +129,7 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
   onTouchStart,
   onSearchResult,
   searchTextRef,
+  onProgress,
 }) => {
   const {
     novel,
@@ -283,6 +285,17 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
               newGeneralSettings,
             )}`,
           );
+          // The paragraph indent / gap are CSS vars baked into the document,
+          // so push them live when the panel toggles change.
+          webViewRef.current?.injectJavaScript(
+            `document.documentElement.style.setProperty('--readerSettings-textIndent', ${JSON.stringify(
+              newGeneralSettings.removeTextIndent ? '0' : '1.5em',
+            )});
+             document.documentElement.style.setProperty('--readerSettings-paragraphGap', ${JSON.stringify(
+               newGeneralSettings.removeExtraParagraphSpacing ? '0px' : '1em',
+             )});
+             true;`,
+          );
           break;
         }
       }
@@ -339,6 +352,14 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
               :root {
                 --StatusBar-currentHeight: ${readerTopInset}px;
                 --reader-bottom-inset: ${readerBottomInset}px;
+                --readerSettings-textIndent: ${
+                  chapterGeneralSettings.removeTextIndent ? '0' : '1.5em'
+                };
+                --readerSettings-paragraphGap: ${
+                  chapterGeneralSettings.removeExtraParagraphSpacing
+                    ? '0px'
+                    : '1em'
+                };
                 --readerSettings-theme: ${initialReaderSettings.theme};
                 --readerSettings-padding: ${initialReaderSettings.padding}px;
                 --readerSettings-textSize: ${initialReaderSettings.textSize}px;
@@ -368,6 +389,10 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
                 }
                 body {
                   padding-bottom: calc(40px + var(--reader-bottom-inset, 0px));
+                }
+                #LNReader-chapter p {
+                  text-indent: var(--readerSettings-textIndent, 0);
+                  margin: var(--readerSettings-paragraphGap, 0px) 0;
                 }
                 </style>
                 <style id="ln-font">
@@ -584,6 +609,7 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
             case 'save':
               if (event.data && typeof event.data === 'number') {
                 saveProgress(event.data);
+                onProgress?.(event.data);
               }
               break;
             case 'text-action':

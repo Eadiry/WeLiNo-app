@@ -299,6 +299,8 @@
     "all": "All",
     "back": "Back",
     "backup": "Backup",
+    "bookmark": "Bookmark",
+    "bookmarkRemove": "Remove bookmark",
     "cancel": "Cancel",
     "categories": "Categories",
     "chapters": "Chapters",
@@ -309,6 +311,7 @@
     "deprecated": "Deprecated",
     "display": "Display",
     "done": "Done",
+    "download": "Download",
     "downloads": "Downloads",
     "edit": "Edit",
     "example": "Example",
@@ -667,9 +670,22 @@
       "volumeButtonsScrollDescription": "Use the volume buttons to scroll instead of adjusting volume"
     },
     "drawer": {
+      "closeBook": "Close Book",
       "scrollToBottom": "Scroll to bottom",
       "scrollToCurrentChapter": "Scroll to current chapter",
       "scrollToTop": "Scroll to top"
+    },
+    "panel": {
+      "color": "Color",
+      "font": "Font",
+      "lineSpacing": "Line Spacing",
+      "margins": "Margins",
+      "moreSettings": "More settings",
+      "noLineBreak": "No Line Break",
+      "noTextIndent": "No Text Indent",
+      "page": "Page",
+      "scroll": "Scroll",
+      "textSize": "Text Size"
     },
     "emptyChapterMessage": "<h2>Chapter couldn't be loaded</h2><p>No readable content was found. Check the chapter in WebView; if it loads there, <a href='%{reportUrl}'>report the plugin issue</a>.</p><p><a href='%{refreshUrl}'>Refresh chapter</a></p><p>Plugin: %{pluginId}<br>Novel: %{novelName}<br>Chapter: %{chapterName}</p>",
     "finished": "Finished",

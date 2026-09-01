@@ -188,6 +188,7 @@ export interface ChapterGeneralSettings {
   autoScrollOffset: number | null;
   verticalSeekbar: boolean;
   removeExtraParagraphSpacing: boolean;
+  removeTextIndent: boolean;
   bionicReading: boolean;
   tapToScroll: boolean;
   TTSEnable: boolean;
@@ -313,6 +314,7 @@ export const initialChapterGeneralSettings: ChapterGeneralSettings = {
   autoScrollOffset: null,
   verticalSeekbar: true,
   removeExtraParagraphSpacing: false,
+  removeTextIndent: false,
   bionicReading: false,
   tapToScroll: false,
   TTSEnable: true,

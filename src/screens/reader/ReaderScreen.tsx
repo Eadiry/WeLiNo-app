@@ -1,8 +1,13 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
-import { useChapterGeneralSettings, useTheme } from '@hooks/persisted';
+import {
+  useChapterGeneralSettings,
+  useDownload,
+  useTheme,
+} from '@hooks/persisted';
 
 import ReaderAppbar from './components/ReaderAppbar';
 import ReaderFooter from './components/ReaderFooter';
+import ReaderSettingsPanel from './components/ReaderSettingsPanel';
 
 import WebViewReader from './components/WebViewReader';
 import ReaderBottomSheetV2 from './components/ReaderBottomSheet/ReaderBottomSheet';
@@ -99,10 +104,13 @@ export const ChapterContent = ({
   const hidden = useReaderChromeHidden();
   const readerSheetRef = useRef<BottomSheetModalMethods>(null);
   const theme = useTheme();
-  const { pageReader = false, keepScreenOn } = useChapterGeneralSettings();
+  const { keepScreenOn } = useChapterGeneralSettings();
+  const { downloadChapter } = useDownload();
   const [bookmarked, setBookmarked] = useState<boolean>(
     chapter.bookmark ?? false,
   );
+  const [settingsPanelVisible, setSettingsPanelVisible] = useState(false);
+  const [progress, setProgress] = useState<number>(chapter.progress ?? 0);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchResult, setSearchResult] = useState<ReaderSearchResult>(
     EMPTY_READER_SEARCH_RESULT,
@@ -165,7 +173,10 @@ export const ChapterContent = ({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchVisible(false);
+    // Reset the seekbar to the newly-opened chapter's saved position.
+    setProgress(chapter.progress ?? 0);
     resetSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapter.id, resetSearch]);
 
   useEffect(() => {
@@ -188,20 +199,32 @@ export const ChapterContent = ({
     `);
   }, [hidden, searchVisible, webViewRef]);
 
-  const scrollToStart = useCallback(() => {
-    onUserInteraction();
-    requestAnimationFrame(() => {
+  const seekToRatio = useCallback(
+    (ratio: number) => {
+      onUserInteraction();
+      const r = Math.min(1, Math.max(0, ratio));
       webViewRef?.current?.injectJavaScript(
-        !pageReader
-          ? `(()=>{
-                window.scrollTo({top:0,behavior:'smooth'})
-              })()`
-          : `(()=>{
-              window.pageReader?.movePage(0);
-            })()`,
+        `(() => {
+          if (window.pageReader && reader.generalSettings.val.pageReader) {
+            window.pageReader.movePage(
+              Math.floor(pageReader.totalPages.val * Math.min(0.99, ${r})),
+            );
+          } else {
+            window.scrollTo({ top: document.body.scrollHeight * ${r}, behavior: 'smooth' });
+          }
+        })(); true;`,
       );
-    });
-  }, [onUserInteraction, pageReader, webViewRef]);
+    },
+    [onUserInteraction, webViewRef],
+  );
+
+  const startTts = useCallback(() => {
+    webViewRef?.current?.injectJavaScript('window.tts?.start(); true;');
+  }, [webViewRef]);
+
+  const handleDownloadChapter = useCallback(() => {
+    downloadChapter(novel, chapter);
+  }, [chapter, downloadChapter, novel]);
 
   const openDrawerI = useCallback(() => {
     openDrawer();
@@ -273,6 +296,7 @@ export const ChapterContent = ({
           onTouchStart={handleReaderTouchStart}
           onSearchResult={setSearchResult}
           searchTextRef={searchTextRef}
+          onProgress={setProgress}
         />
       )}
       {readerSheetMounted ? (
@@ -295,16 +319,27 @@ export const ChapterContent = ({
             openInWebView={openChapterInWebView}
             openInBrowser={openChapterInBrowser}
             shareChapter={shareChapter}
+            openSettingsPanel={() => setSettingsPanelVisible(true)}
+            startTts={startTts}
+            downloadChapter={handleDownloadChapter}
+            isDownloaded={!!chapter.isDownloaded}
           />
           {!searchVisible ? (
             <ReaderFooter
-              openReaderSheet={openReaderSheet}
-              scrollToStart={scrollToStart}
               openDrawer={openDrawerI}
+              progress={progress}
+              onSeek={seekToRatio}
+              novelName={novel.name}
+              chapterName={chapter.name}
             />
           ) : null}
         </>
       ) : null}
+      <ReaderSettingsPanel
+        visible={settingsPanelVisible}
+        onDismiss={() => setSettingsPanelVisible(false)}
+        openReaderSheet={openReaderSheet}
+      />
     </View>
   );
 };

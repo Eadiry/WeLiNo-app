@@ -11,6 +11,45 @@ export const presetReaderThemes: ReaderTheme[] = [
   },
 ];
 
+/** Display names for `presetReaderThemes`, in the same order. */
+export const presetReaderThemeNames = [
+  'Paper',
+  'Sepia',
+  'Mint',
+  'Charcoal',
+  'Black',
+];
+
+export interface NamedValuePreset {
+  name: string;
+  value: number;
+}
+
+/** Reader side padding, surfaced as named steps in the settings panel. */
+export const readerMarginPresets: NamedValuePreset[] = [
+  { name: 'Narrow', value: 8 },
+  { name: 'Medium', value: 16 },
+  { name: 'Wide', value: 32 },
+  { name: 'Wider', value: 48 },
+];
+
+/** Reader line height, surfaced as named steps in the settings panel. */
+export const readerLineSpacingPresets: NamedValuePreset[] = [
+  { name: 'Tight', value: 1.3 },
+  { name: 'Normal', value: 1.5 },
+  { name: 'Relaxed', value: 1.8 },
+  { name: 'Loose', value: 2.1 },
+];
+
+/** Closest preset to `value` — for labelling a control whose stored value is a raw number. */
+export const nearestPreset = (
+  value: number,
+  presets: NamedValuePreset[],
+): NamedValuePreset =>
+  presets.reduce((best, p) =>
+    Math.abs(p.value - value) < Math.abs(best.value - value) ? p : best,
+  );
+
 export interface Font {
   fontFamily: string;
   name: string;

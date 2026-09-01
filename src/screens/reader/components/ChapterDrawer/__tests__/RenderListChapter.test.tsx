@@ -9,16 +9,21 @@ jest.mock('react-native-paper', () => {
   return { Text };
 });
 
+jest.mock('@react-native-vector-icons/material-design-icons', () => 'Icon');
+
 const theme = {
   onSecondaryContainer: '#111111',
   onSurface: '#222222',
   onSurfaceVariant: '#333333',
   outline: '#444444',
+  primary: '#777777',
   rippleColor: '#555555',
   secondaryContainer: '#666666',
+  surfaceVariant: '#888888',
 } as ThemeColors;
 
 const styles = {
+  chapterRow: {},
   chapterCtn: {},
   drawerElementContainer: {},
   chapterNameCtn: {},
@@ -35,6 +40,7 @@ const renderChapter = (item: ChapterInfo, chapterId = 2) =>
   render(
     <RenderListChapter
       item={item}
+      index={0}
       styles={styles}
       theme={theme}
       chapterId={chapterId}
@@ -59,11 +65,11 @@ describe('RenderListChapter', () => {
     });
   });
 
-  it('keeps the current-chapter color regardless of read state', () => {
+  it('uses the primary color for the current chapter regardless of read state', () => {
     renderChapter({ ...chapter, unread: false }, chapter.id);
 
     expect(screen.getByText(chapter.name)).toHaveStyle({
-      color: theme.onSecondaryContainer,
+      color: theme.primary,
     });
   });
 });

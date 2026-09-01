@@ -256,6 +256,8 @@ export interface StringMap {
   'common.all': 'string';
   'common.back': 'string';
   'common.backup': 'string';
+  'common.bookmark': 'string';
+  'common.bookmarkRemove': 'string';
   'common.cancel': 'string';
   'common.categories': 'string';
   'common.chapters': 'string';
@@ -266,6 +268,7 @@ export interface StringMap {
   'common.deprecated': 'string';
   'common.display': 'string';
   'common.done': 'string';
+  'common.download': 'string';
   'common.downloads': 'string';
   'common.edit': 'string';
   'common.example': 'string';
@@ -565,9 +568,20 @@ export interface StringMap {
   'readerScreen.bottomSheet.keepScreenOn': 'string';
   'readerScreen.bottomSheet.volumeButtonsScroll': 'string';
   'readerScreen.bottomSheet.volumeButtonsScrollDescription': 'string';
+  'readerScreen.drawer.closeBook': 'string';
   'readerScreen.drawer.scrollToBottom': 'string';
   'readerScreen.drawer.scrollToCurrentChapter': 'string';
   'readerScreen.drawer.scrollToTop': 'string';
+  'readerScreen.panel.color': 'string';
+  'readerScreen.panel.font': 'string';
+  'readerScreen.panel.lineSpacing': 'string';
+  'readerScreen.panel.margins': 'string';
+  'readerScreen.panel.moreSettings': 'string';
+  'readerScreen.panel.noLineBreak': 'string';
+  'readerScreen.panel.noTextIndent': 'string';
+  'readerScreen.panel.page': 'string';
+  'readerScreen.panel.scroll': 'string';
+  'readerScreen.panel.textSize': 'string';
   'readerScreen.emptyChapterMessage': 'string';
   'readerScreen.finished': 'string';
   'readerScreen.nextChapter': 'string';

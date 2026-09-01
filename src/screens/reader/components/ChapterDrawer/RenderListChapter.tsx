@@ -1,18 +1,21 @@
 import React from 'react';
 import { View, Pressable, TextStyle, StyleProp, ViewStyle } from 'react-native';
 import { Text } from 'react-native-paper';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 import { ChapterInfo } from '@database/types';
 import { ThemeColors } from '@theme/types';
 
 type Styles = {
   chapterCtn: StyleProp<ViewStyle>;
   drawerElementContainer: StyleProp<ViewStyle>;
+  chapterRow: StyleProp<ViewStyle>;
   chapterNameCtn: StyleProp<TextStyle>;
   releaseDateCtn: StyleProp<TextStyle>;
 };
 
 type Props = {
   item: ChapterInfo;
+  index: number;
   styles: Styles;
   theme: ThemeColors;
   chapterId: number;
@@ -27,57 +30,64 @@ type Props = {
  */
 const RenderListChapter = ({
   item,
+  index,
   styles,
   theme,
   onPress,
   chapterId,
 }: Props) => {
   const isCurrentChapter = item.id === chapterId;
+  const isRead = !item.unread;
+
+  const nameColor = isCurrentChapter
+    ? theme.primary
+    : isRead
+    ? theme.outline
+    : theme.onSurface;
 
   return (
     <View
       style={[
         styles.drawerElementContainer,
-        isCurrentChapter && {
-          backgroundColor: theme.secondaryContainer,
-        },
+        index % 2 === 1 && { backgroundColor: theme.surfaceVariant },
+        isCurrentChapter && { backgroundColor: theme.secondaryContainer },
       ]}
     >
       <Pressable
         android_ripple={{ color: theme.rippleColor }}
         onPress={() => onPress(item)}
-        style={styles.chapterCtn}
+        style={styles.chapterRow}
       >
-        <Text
-          numberOfLines={1}
-          style={[
-            styles.chapterNameCtn,
-            {
-              color: isCurrentChapter
-                ? theme.onSecondaryContainer
-                : item.unread
-                ? theme.onSurface
-                : theme.outline,
-            },
-          ]}
-        >
-          {item.name}
-        </Text>
-        {item.releaseTime ? (
+        <View style={styles.chapterCtn}>
           <Text
-            style={[
-              styles.releaseDateCtn,
-              {
-                color: isCurrentChapter
-                  ? theme.onSecondaryContainer
-                  : item.unread
-                  ? theme.onSurfaceVariant
-                  : theme.outline,
-              },
-            ]}
+            numberOfLines={1}
+            style={[styles.chapterNameCtn, { color: nameColor }]}
           >
-            {item.releaseTime}
+            {item.name}
           </Text>
+          {item.releaseTime ? (
+            <Text
+              style={[
+                styles.releaseDateCtn,
+                {
+                  color: isCurrentChapter
+                    ? theme.primary
+                    : isRead
+                    ? theme.outline
+                    : theme.onSurfaceVariant,
+                },
+              ]}
+            >
+              {item.releaseTime}
+            </Text>
+          ) : null}
+        </View>
+        {isRead ? (
+          <MaterialCommunityIcons
+            name="check-circle"
+            size={20}
+            color={theme.primary}
+          />
         ) : null}
       </Pressable>
     </View>
