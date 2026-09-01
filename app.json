@@ -1,9 +1,9 @@
 {
   "expo": {
     "version": "2.1.3",
-    "name": "LNReader",
-    "slug": "LNReader",
-    "scheme": "lnreader",
+    "name": "WeLiNo",
+    "slug": "WeLiNo",
+    "scheme": "welino",
     "icon": "./assets/native/ic_launcher.png",
     "plugins": [
       "./plugins/withAndroidCustomizations",
@@ -57,7 +57,7 @@
     ],
     "android": {
       "versionCode": 4196355,
-      "package": "com.rajarsheechatterjee.LNReader",
+      "package": "com.welino.reader",
       "adaptiveIcon": {
         "foregroundImage": "./assets/native/ic_launcher_foreground.png",
         "backgroundImage": "./assets/native/ic_launcher_background.png",
@@ -72,15 +72,16 @@
         "android.permission.POST_NOTIFICATIONS"
       ]
     },
-    "extra": {
-      "eas": {
-        "projectId": "3a63596f-e80c-4342-96b7-a8ac48910489"
-      }
-    },
     "ios": {
-      "bundleIdentifier": "com.rajarsheechatterjee.LNReader",
+      "bundleIdentifier": "com.welino.reader",
+      "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": ["audio"],
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
       }
     }
   }
