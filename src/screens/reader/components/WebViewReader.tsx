@@ -28,7 +28,7 @@ import { getBatteryLevel } from 'react-native-device-info';
 import { PLUGIN_STORAGE } from '@utils/Storages';
 import { useChapterContext } from '../ChapterContext';
 import { ReaderSearchResult } from '../types';
-import { useTtsSession } from '../hooks/useTtsSession';
+import type { useTtsSession } from '../hooks/useTtsSession';
 import type { TtsSettings } from '@modules/nitro-tts';
 import { ChapterInfo } from '@database/types';
 import { Dialog } from '@components/Dialog';
@@ -55,6 +55,8 @@ type WebViewReaderProps = {
   onSearchResult(result: ReaderSearchResult): void;
   searchTextRef: React.MutableRefObject<string>;
   onProgress?(progress: number): void;
+  /** Shared TTS session, owned by the reader screen (also used by the player). */
+  tts: ReturnType<typeof useTtsSession>;
 };
 
 const onLogMessage = (payload: { nativeEvent: { data: string } }) => {
@@ -130,6 +132,7 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
   onSearchResult,
   searchTextRef,
   onProgress,
+  tts,
 }) => {
   const {
     novel,
@@ -198,7 +201,7 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
     seekTo: seekTts,
     state: ttsState,
     updateSettings: updateTtsSettings,
-  } = useTtsSession();
+  } = tts;
 
   const { customJS, customCSS } = useCustomCode(initialReaderSettings);
 

@@ -58,6 +58,19 @@ export const useTtsSession = () => {
   const uiChapterIdRef = useRef<string>('');
   const topUpInFlightRef = useRef(false);
   const endOfNovelRef = useRef(false);
+  // Full text of every queued paragraph, so the player can caption the one
+  // being spoken (`progress.paragraphId` → text). Also the chapter name per id.
+  const paragraphTextRef = useRef<Map<string, string>>(new Map());
+  const chapterNameByIdRef = useRef<Map<string, string>>(new Map());
+
+  const rememberParagraphs = useCallback((tagged: TtsParagraph[]) => {
+    for (const p of tagged) {
+      paragraphTextRef.current.set(p.id, p.text);
+      if (p.chapterName) {
+        chapterNameByIdRef.current.set(p.chapterId, p.chapterName);
+      }
+    }
+  }, []);
 
   const resetContinuity = useCallback(() => {
     ctxRef.current = null;
@@ -65,6 +78,8 @@ export const useTtsSession = () => {
     uiChapterIdRef.current = '';
     topUpInFlightRef.current = false;
     endOfNovelRef.current = false;
+    paragraphTextRef.current = new Map();
+    chapterNameByIdRef.current = new Map();
   }, []);
 
   /** Fetch the chapter after the last queued one and append it natively. */
@@ -103,6 +118,7 @@ export const useTtsSession = () => {
         chapterId: String(next.id),
         chapterName: next.name,
       }));
+      rememberParagraphs(tagged);
       await session.appendParagraphs(tagged);
       queuedChapterIdsRef.current = [...queued, String(next.id)];
     } catch {
@@ -110,7 +126,7 @@ export const useTtsSession = () => {
     } finally {
       topUpInFlightRef.current = false;
     }
-  }, []);
+  }, [rememberParagraphs]);
 
   const ensureSession = useCallback(async () => {
     if (sessionRef.current) {
@@ -190,6 +206,7 @@ export const useTtsSession = () => {
         chapterId: resolvedChapterId,
         chapterName: ctx?.chapter.name ?? metadata.chapterName,
       }));
+      rememberParagraphs(tagged);
 
       await run(async session => {
         await session.load(tagged, startIndex, metadata, settings);
@@ -206,7 +223,7 @@ export const useTtsSession = () => {
         })();
       }
     },
-    [resetContinuity, run, topUp],
+    [rememberParagraphs, resetContinuity, run, topUp],
   );
 
   const command = useCallback(
@@ -260,12 +277,25 @@ export const useTtsSession = () => {
       mountedRef.current = false;
       subscriptionsRef.current.forEach(subscription => subscription.remove());
       subscriptionsRef.current = [];
-      if (sessionRef.current) {
-        void sessionRef.current.stop();
-      }
+      // Deliberately do NOT stop the native session here — narration continues
+      // while the user leaves the reader / navigates the app (and via the
+      // lock-screen controls). It only stops on an explicit `command('stop')`.
       sessionRef.current = null;
+      sessionPromiseRef.current = null;
     };
   }, [ensureSession]);
+
+  // Text of the paragraph being spoken + which chapter it's in — for the
+  // player. Lookup tables keyed by the current `progress` (real state), so a
+  // ref read here is safe.
+  /* eslint-disable react-hooks/refs */
+  const currentText = progress.paragraphId
+    ? paragraphTextRef.current.get(progress.paragraphId) ?? ''
+    : '';
+  const currentChapterName = progress.chapterId
+    ? chapterNameByIdRef.current.get(progress.chapterId) ?? ''
+    : '';
+  /* eslint-enable react-hooks/refs */
 
   return {
     command,
@@ -275,5 +305,7 @@ export const useTtsSession = () => {
     seekTo,
     state,
     updateSettings,
+    currentText,
+    currentChapterName,
   };
 };

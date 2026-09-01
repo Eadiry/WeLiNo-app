@@ -291,6 +291,7 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
 
 1. **Continuous cross-chapter TTS** — _implemented (iOS), pending on-device
    verification._
+
    - Nitro spec: `TtsParagraph` gains `chapterId`/`chapterName`, `TtsProgress`
      gains `chapterId`, `TtsSession` gains `appendParagraphs()` +
      `addOnQueueLowListener()`. Regenerated with `pnpm --dir modules/nitro-tts specs`.
@@ -310,10 +311,31 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
    - `core.js`: `tts.start()` tags the queue with `chapterId`; `tts.complete()`
      no longer drives navigation (native owns it); new
      `setActiveByParagraphId()` highlights by id and ignores other chapters.
-2. **Text pipeline** before `load()`: persistent character-name substitution,
+
+2. **Audio player screen + app-wide playback** — _implemented, pending device
+   test._
+   - `useTtsSession` is lifted to `ChapterContent` in `ReaderScreen.tsx` and
+     passed as a `tts` prop to `WebViewReader` (one shared session). Its
+     unmount cleanup no longer calls `session.stop()` — narration continues
+     when you leave the reader / navigate the app (lock-screen controls stay
+     live); it stops only on an explicit `command('stop')`.
+   - `useTtsSession` also exposes `currentText` / `currentChapterName`
+     (lookup by `progress.paragraphId` in a `Map` filled from every
+     `load`/`appendParagraphs`).
+   - New `ReaderPlayerScreen.tsx` — full-screen overlay that auto-opens when
+     narration starts (also from the appbar headphones button). Shows the
+     novel + chapter title, the **paragraph being spoken** as a large caption
+     (text only — images/ads are never in it), skip-prev / play-pause /
+     skip-next transport, a speed chip (cycles, persists to
+     `CHAPTER_READER_SETTINGS.tts.rate`), a sleep-timer chip, and a bottom bar
+     with **Reader** (back to reading, narration keeps going) and **Settings**
+     (opens the TTS bottom sheet).
+   - New `useSleepTimer.ts` — 10/20/30/45/60 min countdown or end-of-chapter
+     (fires on the next `progress.chapterId` change); `onFire` → pause.
+3. **Text pipeline** before `load()`: persistent character-name substitution,
    offline MTL cleanup, LanguageTool deep-clean, CJK auto-romanisation.
    Port from the Capacitor WeLiNo repo (`src/pipeline/`, `src/substitution/`).
-3. **On-device Kokoro TTS** _(decided; do after Milestone 1 is signed off)_.
+4. **On-device Kokoro TTS** _(decided; do after Milestone 1 is signed off)_.
    Kokoro-82M (Apache-2.0, ~54 voices) as a second synthesis engine alongside
    `AVSpeechSynthesizer`, running **fully on the phone** — no API key, no
    network, no per-use cost. Pieces:

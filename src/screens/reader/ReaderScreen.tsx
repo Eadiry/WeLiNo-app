@@ -8,6 +8,8 @@ import {
 import ReaderAppbar from './components/ReaderAppbar';
 import ReaderFooter from './components/ReaderFooter';
 import ReaderSettingsPanel from './components/ReaderSettingsPanel';
+import ReaderPlayerScreen from './components/ReaderPlayerScreen';
+import { useTtsSession } from './hooks/useTtsSession';
 
 import WebViewReader from './components/WebViewReader';
 import ReaderBottomSheetV2 from './components/ReaderBottomSheet/ReaderBottomSheet';
@@ -110,7 +112,10 @@ export const ChapterContent = ({
     chapter.bookmark ?? false,
   );
   const [settingsPanelVisible, setSettingsPanelVisible] = useState(false);
+  const [playerVisible, setPlayerVisible] = useState(false);
   const [progress, setProgress] = useState<number>(chapter.progress ?? 0);
+  const tts = useTtsSession();
+  const wasPlayingRef = useRef(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchResult, setSearchResult] = useState<ReaderSearchResult>(
     EMPTY_READER_SEARCH_RESULT,
@@ -223,7 +228,20 @@ export const ChapterContent = ({
     webViewRef?.current?.injectJavaScript(
       '(window.tts?.startFromVisible ?? window.tts?.start)?.call(window.tts); true;',
     );
+    setPlayerVisible(true);
   }, [webViewRef]);
+
+  // Auto-open the player when narration starts; close it when narration ends.
+  useEffect(() => {
+    if (tts.state === 'playing' && !wasPlayingRef.current) {
+      setPlayerVisible(true);
+    }
+    if (tts.state === 'idle') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPlayerVisible(false);
+    }
+    wasPlayingRef.current = tts.state === 'playing';
+  }, [tts.state]);
 
   const handleDownloadChapter = useCallback(() => {
     downloadChapter(novel, chapter);
@@ -300,6 +318,7 @@ export const ChapterContent = ({
           onSearchResult={setSearchResult}
           searchTextRef={searchTextRef}
           onProgress={setProgress}
+          tts={tts}
         />
       )}
       {readerSheetMounted ? (
@@ -342,6 +361,14 @@ export const ChapterContent = ({
         visible={settingsPanelVisible}
         onDismiss={() => setSettingsPanelVisible(false)}
         openReaderSheet={openReaderSheet}
+      />
+      <ReaderPlayerScreen
+        visible={playerVisible}
+        onClose={() => setPlayerVisible(false)}
+        onOpenSettings={openReaderSheet}
+        tts={tts}
+        novel={novel}
+        chapter={chapter}
       />
     </View>
   );

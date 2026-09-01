@@ -142,7 +142,7 @@ describe('useTtsSession', () => {
     });
   });
 
-  it('stops the native session and removes listeners on unmount', async () => {
+  it('removes listeners but keeps narration going on unmount', async () => {
     const { unmount } = renderHook(useTtsSession);
     const session = await getNativeSession();
     await waitFor(() =>
@@ -156,9 +156,13 @@ describe('useTtsSession', () => {
     ];
     unmount();
 
-    await waitFor(() => expect(session.stop).toHaveBeenCalledTimes(1));
-    subscriptions.forEach(item => {
-      expect(item.remove).toHaveBeenCalled();
+    await waitFor(() => {
+      subscriptions.forEach(item => {
+        expect(item.remove).toHaveBeenCalled();
+      });
     });
+    // Leaving the reader must NOT stop playback — it continues app-wide / on
+    // the lock screen until an explicit stop.
+    expect(session.stop).not.toHaveBeenCalled();
   });
 });
