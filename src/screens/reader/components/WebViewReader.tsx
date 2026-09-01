@@ -623,7 +623,12 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
               if (event.autoStartTTS) {
                 autoStartTTSRef.current = true;
               }
-              navigateChapter('PREV');
+              navigateChapter('PREV', {
+                openAtEnd:
+                  !!event.data &&
+                  typeof event.data === 'object' &&
+                  (event.data as { openAtEnd?: boolean }).openAtEnd === true,
+              });
               break;
             case 'save':
               if (event.data && typeof event.data === 'number') {

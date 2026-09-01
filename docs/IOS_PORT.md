@@ -221,6 +221,22 @@ is implemented (pre-existing limitation). No brightness slider (would need
   adjacent-chapter object, whose `progress` was stale), and `navigateChapter`
   flushes the outgoing chapter's `progress` before switching. Swiping back a
   chapter no longer lands at the top.
+- **Paging back across a chapter boundary opens the previous chapter at its
+  last page.** `core.js` `movePage` (destPage < 0) posts
+  `{type:'prev', data:{openAtEnd:true}}`; `navigateChapter('PREV', {openAtEnd})`
+  → `getChapter(prev, true)` forces `progress: 100` on the loaded row so
+  `restoreReadingPosition` lands on the final page (never persisted — restore
+  uses `save:false`).
+- **TTS: no more chapter skips / silent stops.** `assets/reader/js/core.js`:
+  `tts.start()` bails if there are no readable elements yet (an empty queue
+  was being "completed" instantly by native and, with auto-advance, skipping
+  a chapter); `tts.complete()` ignores a stray completion that arrives with
+  nothing loaded/read (`totalElements === 0 || elementsRead === 0`) — that's
+  the event landing in the _new_ chapter after an auto-advance. `tts`
+  `autoPageAdvance` now **defaults on** (`initialChapterReaderSettings.tts`
+  - the `useChapterReaderSettings` migration), so narration continues into
+    the next chapter instead of stopping at each chapter end; toggle in reader
+    TTS settings.
 - **Page-mode swipes.** `core.js` swipe handler: page-turn threshold 30% → 16%
   of the width, plus a flick-velocity shortcut; `touchmove` is now
   non-passive and calls `preventDefault()` on a mostly-horizontal drag so the

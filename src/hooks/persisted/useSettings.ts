@@ -334,7 +334,9 @@ export const initialChapterReaderSettings: ChapterReaderSettings = {
   tts: {
     rate: 1,
     pitch: 1,
-    autoPageAdvance: false,
+    // Keep narrating into the next chapter instead of stopping at each
+    // chapter end. Toggle in reader TTS settings.
+    autoPageAdvance: true,
     scrollToTop: true,
   },
   epubLocation: '',
@@ -438,7 +440,7 @@ export const useChapterReaderSettings = () => {
         ...initialChapterReaderSettings.tts,
         ...storedSettings.tts,
         // Explicitly ensure these defaults if undefined
-        autoPageAdvance: storedSettings.tts?.autoPageAdvance ?? false,
+        autoPageAdvance: storedSettings.tts?.autoPageAdvance ?? true,
         scrollToTop: storedSettings.tts?.scrollToTop ?? true,
         rate: storedSettings.tts?.rate ?? 1,
         pitch: storedSettings.tts?.pitch ?? 1,

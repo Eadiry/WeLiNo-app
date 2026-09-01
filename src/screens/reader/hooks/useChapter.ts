@@ -328,7 +328,7 @@ export default function useChapter(
   );
 
   const getChapter = useCallback(
-    async (navChapter?: ChapterInfo) => {
+    async (navChapter?: ChapterInfo, openAtEnd = false) => {
       const loadId = ++loadIdRef.current;
       const isStale = () => loadId !== loadIdRef.current;
       const requested = navChapter ?? chapterRef.current;
@@ -347,7 +347,12 @@ export default function useChapter(
           return;
         }
 
-        const chap = dbChapter ?? requested;
+        let chap = dbChapter ?? requested;
+        if (openAtEnd) {
+          // Paging backward across a chapter boundary lands on the *last* page
+          // of the previous chapter, not wherever it was last left.
+          chap = { ...chap, progress: 100 };
+        }
         setChapter(chap);
         setChapterText(html);
         setAdjacentChapter(NO_ADJACENT_CHAPTERS);
@@ -461,7 +466,7 @@ export default function useChapter(
   }, [setImmersiveMode, showStatusAndNavBar, webViewRef]);
 
   const navigateChapter = useCallback(
-    (position: 'NEXT' | 'PREV') => {
+    (position: 'NEXT' | 'PREV', options?: { openAtEnd?: boolean }) => {
       const [next, prev] = adjacentChapterRef.current;
       const navChapter = position === 'NEXT' ? next : prev;
 
@@ -472,7 +477,7 @@ export default function useChapter(
         webViewRef.current?.injectJavaScript(
           `if (window.reader?.chapter) { reader.post({ type: 'save', data: reader.chapter.progress }); } true;`,
         );
-        getChapter(navChapter);
+        getChapter(navChapter, position === 'PREV' && options?.openAtEnd);
       } else {
         showToast(
           position === 'NEXT'

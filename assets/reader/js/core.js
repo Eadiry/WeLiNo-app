@@ -315,8 +315,17 @@ window.tts = new (function () {
         : 0;
     const startIndex = requestedIndex >= 0 ? requestedIndex : 0;
 
-    this.started = this.totalElements > 0;
-    this.reading = this.started;
+    // Nothing to read yet (e.g. start() fired before the chapter DOM was
+    // ready). Bail instead of shipping an empty queue, which the native side
+    // would "complete" instantly and, with auto-advance on, skip the chapter.
+    if (this.totalElements === 0) {
+      this.started = false;
+      this.reading = false;
+      return;
+    }
+
+    this.started = true;
+    this.reading = true;
     this.setActiveIndex(startIndex);
     reader.post({
       type: 'tts-queue',
@@ -440,6 +449,13 @@ window.tts = new (function () {
 
   this.complete = () => {
     this.reading = false;
+    // A completion event that arrives with nothing loaded/read is stray —
+    // typically it lands in the *new* chapter's context right after an
+    // auto-advance. Acting on it would advance again and skip a chapter.
+    if (this.totalElements === 0 || this.elementsRead === 0) {
+      this.reset();
+      return;
+    }
     if (
       reader.readerSettings.val.tts?.autoPageAdvance === true &&
       reader.nextChapter
@@ -596,7 +612,9 @@ window.pageReader = new (function () {
       this.showChapterEnding(true, false, true);
       this.chapterNavigationPending = true;
       setTimeout(() => {
-        reader.post({ type: 'prev' });
+        // Paging back across the boundary → open the previous chapter at its
+        // last page, not its saved position.
+        reader.post({ type: 'prev', data: { openAtEnd: true } });
       }, 200);
       return;
     }
