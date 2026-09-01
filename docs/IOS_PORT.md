@@ -55,7 +55,14 @@ No new features.
   fails on it, gate the export button behind `Platform.OS === 'android'` and
   exclude the pod.
 
-### Build-log fixes applied
+### Build-log / runtime fixes applied
+
+- **Stuck on splash screen (first TestFlight install).** `src/database/db.ts`
+  opened op-sqlite with `location: '../files/SQLite'` — an Android-only path
+  (relative to the app's files dir). On iOS that parent doesn't exist and
+  op-sqlite doesn't create it, so `open()` threw at module load, `import App`
+  failed, and the JS root never mounted → native splash forever. Now the
+  `location` override is Android-only; iOS uses the default location.
 
 - **`pod install` failed**: `AppCheckCore` (Swift, via
   `@react-native-google-signin/google-signin`) depends on `GoogleUtilities`

@@ -8,6 +8,7 @@ import { migrate } from 'drizzle-orm/op-sqlite/migrator';
 import migrations from '../../drizzle/migrations';
 import { createDbManager } from './manager/manager';
 import { open } from '@op-engineering/op-sqlite';
+import { Platform } from 'react-native';
 import { createCategoryDefaultQuery } from './queryStrings/populate';
 import {
   createCategoryTriggerQuery,
@@ -25,7 +26,15 @@ class MyLogger implements Logger {
 }
 
 const DB_NAME = 'lnreader.db';
-const _db = open({ name: DB_NAME, location: '../files/SQLite' });
+// `../files/SQLite` is an Android-only path (relative to the app's files dir).
+// On iOS that parent doesn't exist and op-sqlite won't create it, so `open()`
+// throws at module load and the app hangs on the splash screen. Use the
+// platform default location on iOS. See docs/IOS_PORT.md.
+const _db = open(
+  Platform.OS === 'android'
+    ? { name: DB_NAME, location: '../files/SQLite' }
+    : { name: DB_NAME },
+);
 
 const INITIAL_MIGRATION_NAME = '20251222152612_past_mandrill';
 const INITIAL_MIGRATION_CREATED_AT = 1766417172000;
