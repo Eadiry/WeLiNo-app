@@ -55,6 +55,16 @@ No new features.
   fails on it, gate the export button behind `Platform.OS === 'android'` and
   exclude the pod.
 
+### Build-log fixes applied
+
+- **`pod install` failed**: `AppCheckCore` (Swift, via
+  `@react-native-google-signin/google-signin`) depends on `GoogleUtilities`
+  / `RecaptchaInterop`, which don't define modules → can't integrate as
+  static libs. Fixed with `expo-build-properties` `ios.extraPods` +
+  `modular_headers: true` for `GoogleUtilities`, `RecaptchaInterop`,
+  `AppCheckCore`. If a later error names more Google/Firebase pods, add them
+  there too (or switch to `use_modular_headers!` globally).
+
 ### First Codemagic build — likely failure points
 
 1. **`pod install`** on Expo 57 / RN 0.86 / New Arch — watch for `nitro-epub`
