@@ -14,6 +14,9 @@ body.page-reader > #LNReader-chapter {
   column-gap: calc(var(--readerSettings-padding) * 2);
   column-fill: auto;
   transition: transform 200ms;
+  /* JS drives the horizontal page transform — keep the browser out of it so a
+     diagonal swipe can't scroll the column overflow or rubber-band. */
+  touch-action: none;
 }
 .transition-chapter {
   height: 100vh;

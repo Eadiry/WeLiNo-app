@@ -962,24 +962,20 @@ window.addEventListener('load', () => {
     this.startTime = Date.now();
   });
 
-  reader.chapterElement.addEventListener(
-    'touchmove',
-    e => {
-      if (reader.generalSettings.val.pageReader) {
-        const dx = e.changedTouches[0].screenX - this.initialX;
-        const dy = e.changedTouches[0].screenY - this.initialY;
-        // Keep the page from scrolling up/down while dragging sideways.
-        if (Math.abs(dx) > Math.abs(dy)) {
-          e.preventDefault();
-        }
-        const diffX = dx / reader.layoutWidth;
-        reader.chapterElement.style.transition = 'unset';
-        reader.chapterElement.style.transform =
-          'translateX(-' + (pageReader.page.val - diffX) * 100 + '%)';
-      }
-    },
-    { passive: false },
-  );
+  // Passive so it never sits on the scroll path — vertical scrolling in scroll
+  // mode stays as smooth as the native momentum. Page mode blocks browser
+  // touch gestures via `touch-action: none` (pageReader.css) instead of
+  // preventDefault, so this only has to move the columns.
+  reader.chapterElement.addEventListener('touchmove', e => {
+    if (!reader.generalSettings.val.pageReader) {
+      return;
+    }
+    const diffX =
+      (e.changedTouches[0].screenX - this.initialX) / reader.layoutWidth;
+    reader.chapterElement.style.transition = 'unset';
+    reader.chapterElement.style.transform =
+      'translateX(-' + (pageReader.page.val - diffX) * 100 + '%)';
+  });
 
   reader.chapterElement.addEventListener('touchend', e => {
     const diffX = e.changedTouches[0].screenX - this.initialX;
