@@ -227,6 +227,23 @@ is implemented (pre-existing limitation). No brightness slider (would need
   → `getChapter(prev, true)` forces `progress: 100` on the loaded row so
   `restoreReadingPosition` lands on the final page (never persisted — restore
   uses `save:false`).
+- **Page-mode position restore was broken for anyone who'd ever pressed
+  "next".** `nextChapterScreenVisible` (a one-shot slide-in flag) was set on
+  `next` and never reset, so every later chapter's
+  `initialPageReaderConfig.nextChapterScreenVisible` was `true` →
+  `chapterEndingVisible` started `true` → `repaginate` bailed before
+  restoring the page. Now reset in `onLoadEnd` after the document consumes
+  it. (This is why the openAtEnd fix "still didn't work" — same root cause.)
+- **Chapter title is spoken + shown.** A `<p class="ln-chapter-name">` with
+  `chapter.name` is prepended into `#LNReader-chapter`, so it's the first
+  readable element — TTS reads "Chapter 30: …" before the body, and it shows
+  as a heading at the top of every chapter.
+- **TTS survives interruptions.** `TtsPlaybackCoordinator` now observes
+  `AVAudioSession.interruptionNotification`: pauses on `.began`, and on
+  `.ended` with `.shouldResume` re-activates the session and calls
+  `speakCurrent()`. A notification sound / short call no longer kills
+  narration for good. (Cross-chapter continuation while fully backgrounded
+  still needs the Milestone-2 native multi-chapter queue.)
 - **TTS: no more chapter skips / silent stops.** `assets/reader/js/core.js`:
   `tts.start()` bails if there are no readable elements yet (an empty queue
   was being "completed" instantly by native and, with auto-advance, skipping

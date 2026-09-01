@@ -414,6 +414,13 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
                   text-indent: var(--readerSettings-textIndent, 0);
                   margin: var(--readerSettings-paragraphGap, 0px) 0;
                 }
+                #LNReader-chapter .ln-chapter-name {
+                  text-indent: 0;
+                  font-weight: 700;
+                  font-size: 1.15em;
+                  line-height: 1.4;
+                  margin: 0 0 1.4em;
+                }
                 </style>
                 <style id="ln-font">
                 @font-face {
@@ -437,6 +444,7 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
               ${chapterGeneralSettings.pageReader ? '' : 'display: none'}"
               ">${chapter.name}</div>
               <div id="LNReader-chapter">
+                <p class="ln-chapter-name">${chapter.name}</p>
                 ${processedHtml}
               </div>
               <div id="reader-ui"></div>
@@ -518,6 +526,11 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
           return true;
         }}
         onLoadEnd={() => {
+          // One-shot transition flag: consumed by the document that just
+          // loaded. Leaving it set makes every later page-mode chapter open
+          // with `chapterEndingVisible` true, which blocks `repaginate` from
+          // restoring the reading position (chapter opens at the top).
+          nextChapterScreenVisible.current = false;
           webViewRef.current?.injectJavaScript(
             `if (window.reader && window.reader.batteryLevel) {
             window.reader.batteryLevel.val = ${lastKnownBatteryLevel};

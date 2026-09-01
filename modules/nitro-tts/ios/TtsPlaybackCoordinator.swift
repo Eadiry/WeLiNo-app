@@ -17,6 +17,10 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
   private var settings = TtsSettings(engineName: nil, voiceIdentifier: nil, rate: 1, pitch: 1)
   private var state: TtsPlaybackState = .idle
   private var activeUtterance: AVSpeechUtterance?
+  /// True while playback is suspended by an audio-session interruption (phone
+  /// call, another app's audio, a notification sound…). Used to auto-resume
+  /// once the interruption ends — otherwise narration just dies mid-session.
+  private var resumeAfterInterruption = false
 
   private lazy var remoteCommands = TtsRemoteCommandController(
     onPlay: { [weak self] in self?.play() },
@@ -30,6 +34,51 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     super.init()
     synthesizer.delegate = self
     _ = remoteCommands
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleAudioSessionInterruption(_:)),
+      name: AVAudioSession.interruptionNotification,
+      object: nil
+    )
+  }
+
+  @objc private func handleAudioSessionInterruption(_ notification: Notification) {
+    guard
+      let info = notification.userInfo,
+      let rawType = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+      let type = AVAudioSession.InterruptionType(rawValue: rawType)
+    else { return }
+
+    switch type {
+    case .began:
+      resumeAfterInterruption = (state == .playing)
+      if state == .playing {
+        synthesizer.stopSpeaking(at: .immediate)
+        state = .paused
+        emitState()
+      }
+    case .ended:
+      guard resumeAfterInterruption else { return }
+      resumeAfterInterruption = false
+      let shouldResume: Bool
+      if let rawOptions = info[AVAudioSessionInterruptionOptionKey] as? UInt {
+        shouldResume = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
+          .contains(.shouldResume)
+      } else {
+        shouldResume = false
+      }
+      guard shouldResume else { return }
+      DispatchQueue.main.async { [weak self] in
+        guard let self, !self.paragraphs.isEmpty else { return }
+        self.speakCurrent()
+      }
+    @unknown default:
+      break
+    }
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
   }
 
   func load(
