@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
+  AppState,
   Platform,
   Pressable,
   View,
@@ -135,8 +136,10 @@ const VoicePickerModal: React.FC<VoicePickerModalProps> = ({
         </View>
         {Platform.OS === 'ios' ? (
           <Text style={[styles.filterLabel, { color: theme.onSurfaceVariant }]}>
-            More voices (Siri, enhanced, other languages) can be added in iOS
-            Settings › Accessibility › Spoken Content › Voices.
+            Add voices in iOS Settings › Accessibility › Spoken Content › Voices
+            — pick the “Enhanced” or “Premium” ones. Siri voices are reserved by
+            Apple and can’t appear here. A newly downloaded voice may need the
+            app reopened.
           </Text>
         ) : null}
       </Dialog.Content>
@@ -322,11 +325,31 @@ const TTSTab: React.FC = () => {
 
   // Voices belong to a specific engine, so refetch whenever it changes.
   const engineName = tts?.engine?.name;
-  useEffect(() => {
+  const loadVoices = useCallback(() => {
     Tts.getVoices(engineName).then(res => {
       setVoices([...res].sort((a, b) => a.name.localeCompare(b.name)));
     });
   }, [engineName]);
+
+  // Refetch on mount / engine change, whenever the picker is opened, and on
+  // app foreground — iOS only exposes a voice through
+  // `AVSpeechSynthesisVoice.speechVoices()` once its download has finished, so
+  // a voice added in iOS Settings while the app was open needs a fresh read.
+  useEffect(() => {
+    if (voiceModalVisible) {
+      loadVoices();
+    }
+  }, [loadVoices, voiceModalVisible]);
+
+  useEffect(() => {
+    loadVoices();
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        loadVoices();
+      }
+    });
+    return () => sub.remove();
+  }, [loadVoices]);
 
   const handleEngineSelect = useCallback(
     (engine?: TtsEngine) => {
