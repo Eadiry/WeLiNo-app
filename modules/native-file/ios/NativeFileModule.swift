@@ -101,6 +101,22 @@ public class NativeFileModule: Module {
       promise.reject("NOT_IMPLEMENTED", "downloadFile is not implemented on iOS")
     }
 
+    // Android Storage-Access-Framework pickers — not ported for iOS. These
+    // exist so the JS contract is complete; calling them (backup import,
+    // "choose folder", EPUB import) rejects instead of crashing the JS VM
+    // with "undefined is not a function".
+    AsyncFunction("createDocument") { (filename: String, mimeType: String, promise: Promise) in
+      promise.reject("NOT_IMPLEMENTED", "createDocument is not implemented on iOS")
+    }
+
+    AsyncFunction("pickDocument") { (mimeType: String, promise: Promise) in
+      promise.reject("NOT_IMPLEMENTED", "pickDocument is not implemented on iOS")
+    }
+
+    AsyncFunction("pickDirectory") { (promise: Promise) in
+      promise.reject("NOT_IMPLEMENTED", "pickDirectory is not implemented on iOS")
+    }
+
     Constant("DocumentDirectoryPath") {
       let paths = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)
       return paths.first ?? ""

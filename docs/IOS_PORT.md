@@ -57,6 +57,19 @@ No new features.
 
 ### Build-log / runtime fixes applied
 
+- **"undefined is not a function" opening a chapter (reader crash).**
+  `modules/native-volume-button-listener/ios/…Module.swift` was a stub that
+  declared the events but not `setActive`, which the reader
+  (`src/screens/reader/…`) calls unconditionally in a `useEffect`. Added a
+  no-op `Function("setActive")`. Also stubbed `native-file`'s missing iOS
+  functions (`createDocument`, `pickDocument`, `pickDirectory` — Android SAF
+  pickers) so backup-import / choose-folder reject cleanly instead of
+  crashing the JS VM. To symbolicate a Hermes release trace: the Xcode
+  bundle phase ships an **un-minified** JS bundle, so reproduce with
+  `npx expo export:embed --platform ios --dev false --minify false
+--entry-file index.js --bundle-output main.jsbundle --sourcemap-output
+main.jsbundle.map`.
+
 - **Stuck on splash screen (first TestFlight install).** `src/database/db.ts`
   opened op-sqlite with `location: '../files/SQLite'` — an Android-only path
   (relative to the app's files dir). On iOS that parent doesn't exist and
