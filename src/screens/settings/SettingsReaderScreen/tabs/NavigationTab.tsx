@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { Platform, View, StyleSheet, useWindowDimensions } from 'react-native';
 import { TextInput } from 'react-native-paper';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import defaultTo from 'lodash-es/defaultTo';
@@ -36,42 +36,49 @@ const NavigationTab: React.FC = () => {
     >
       <View style={styles.section}>
         <List.SubHeader theme={theme}>Navigation Controls</List.SubHeader>
-        <SettingSwitch
-          label={getString('readerScreen.bottomSheet.volumeButtonsScroll')}
-          description={getString(
-            'readerScreen.bottomSheet.volumeButtonsScrollDescription',
-          )}
-          value={useVolumeButtons}
-          onPress={() =>
-            setChapterGeneralSettings({ useVolumeButtons: !useVolumeButtons })
-          }
-          theme={theme}
-        />
-        {useVolumeButtons && (
-          <View style={styles.inputContainer}>
-            <TextInput
-              label={getString('readerSettings.volumeButtonOffset')}
-              mode="outlined"
-              keyboardType="numeric"
-              defaultValue={defaultTo(
-                volumeButtonsOffset
-                  ? Math.round(volumeButtonsOffset / screenHeight)
-                  : null,
-                0.75,
-              ).toString()}
-              onChangeText={text => {
-                if (!isNaN(Number(text))) {
-                  setChapterGeneralSettings({
-                    volumeButtonsOffset: Math.round(
-                      Number(text) * screenHeight,
-                    ),
-                  });
-                }
-              }}
-              style={styles.textInput}
-              theme={{ colors: { ...theme } }}
+        {/* Volume-button page turning is Android only. */}
+        {Platform.OS === 'android' && (
+          <>
+            <SettingSwitch
+              label={getString('readerScreen.bottomSheet.volumeButtonsScroll')}
+              description={getString(
+                'readerScreen.bottomSheet.volumeButtonsScrollDescription',
+              )}
+              value={useVolumeButtons}
+              onPress={() =>
+                setChapterGeneralSettings({
+                  useVolumeButtons: !useVolumeButtons,
+                })
+              }
+              theme={theme}
             />
-          </View>
+            {useVolumeButtons && (
+              <View style={styles.inputContainer}>
+                <TextInput
+                  label={getString('readerSettings.volumeButtonOffset')}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  defaultValue={defaultTo(
+                    volumeButtonsOffset
+                      ? Math.round(volumeButtonsOffset / screenHeight)
+                      : null,
+                    0.75,
+                  ).toString()}
+                  onChangeText={text => {
+                    if (!isNaN(Number(text))) {
+                      setChapterGeneralSettings({
+                        volumeButtonsOffset: Math.round(
+                          Number(text) * screenHeight,
+                        ),
+                      });
+                    }
+                  }}
+                  style={styles.textInput}
+                  theme={{ colors: { ...theme } }}
+                />
+              </View>
+            )}
+          </>
         )}
         <SettingSwitch
           label={getString('readerScreen.bottomSheet.verticalSeekbar')}

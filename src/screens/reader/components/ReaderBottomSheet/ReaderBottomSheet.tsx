@@ -1,4 +1,5 @@
 import {
+  Platform,
   StyleProp,
   StyleSheet,
   Text,
@@ -121,11 +122,16 @@ const navigationPreferences: GeneralPreference[] = [
     label: 'swipeGestures',
     description: 'swipeGesturesDescription',
   },
-  {
-    key: 'useVolumeButtons',
-    label: 'volumeButtonsScroll',
-    description: 'volumeButtonsScrollDescription',
-  },
+  // Volume-button page turning is Android only (no iOS media-volume hook).
+  ...(Platform.OS === 'android'
+    ? [
+        {
+          key: 'useVolumeButtons' as const,
+          label: 'volumeButtonsScroll',
+          description: 'volumeButtonsScrollDescription',
+        },
+      ]
+    : []),
   {
     key: 'pageReader',
     label: 'pageReader',

@@ -126,7 +126,9 @@ const MainNavigator = () => {
     >
       <LibraryContextProvider>
         <UpdateContextProvider>
-          <AppUpdateChecker />
+          {/* GitHub-release APK self-updater — Android only; iOS updates
+              come through TestFlight / the App Store. */}
+          {Platform.OS === 'android' && <AppUpdateChecker />}
           <Stack.Navigator
             screenOptions={{
               ...backNavOptions,

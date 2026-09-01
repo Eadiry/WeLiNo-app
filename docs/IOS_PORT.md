@@ -55,6 +55,27 @@ No new features.
   fails on it, gate the export button behind `Platform.OS === 'android'` and
   exclude the pod.
 
+### Android-only features hidden on iOS
+
+Gated behind `Platform.OS === 'android'` (kept in code for Android + clean
+upstream merges):
+
+- **APK self-updater** (`AppUpdateChecker` in `Main.tsx`) — iOS updates via
+  TestFlight / App Store.
+- **Volume-button page turning** — reader bottom sheet + `NavigationTab`
+  toggle & offset. No iOS media-volume hook (`native-volume-button-listener`
+  is a stub).
+- **Automatic library updates** (`SettingsLibraryScreen`) and **automatic
+  backups** — frequency + location (`SettingsBackupScreen`). Need a native
+  background task + persisted folder grant, neither on iOS yet.
+- Already platform-gated by their libraries: **Material You / dynamic
+  colors** (`isDynamicThemeSupported` is Android-12+), **DNS-over-HTTPS**
+  (`native-doh`, `Platform.OS === 'android' && NativeDoh`).
+
+Still visible but not yet functional on iOS (cross-platform features
+needing an iOS path, not Android-only): manual backup create/restore (SAF
+pickers), chapter downloads (background-task no-op), EPUB export.
+
 ### iOS UX fixes
 
 - **No way to go back.** Top-level stacks (`Main.tsx`, `MoreStack.tsx`) set

@@ -11,7 +11,7 @@ import {
 } from '@services/backgroundTasks';
 import { ScrollView } from 'react-native-gesture-handler';
 import { getString } from '@i18n/translations';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import dayjs from 'dayjs';
 import NativeFile from '@modules/native-file';
 import { useState } from 'react';
@@ -172,31 +172,37 @@ const BackupSettings = ({ navigation }: BackupSettingsScreenProps) => {
             onPress={restoreLocalBackup}
             theme={theme}
           />
-          <List.Item
-            title={getString('backupScreen.automaticBackupFrequency')}
-            description={getString(
-              AUTOMATIC_BACKUP_LABELS[automaticBackupIntervalHours],
-            )}
-            onPress={automaticBackupDialog.setTrue}
-            theme={theme}
-          />
-          <List.Item
-            title={getString('backupScreen.automaticBackupLocation')}
-            description={
-              automaticBackupDirectoryName ??
-              `${NativeFile.ExternalDirectoryPath}/Backups`
-            }
-            onPress={selectAutomaticBackupDirectory}
-            theme={theme}
-          />
-          {lastAutomaticBackupAt ? (
-            <List.InfoItem
-              title={getString('backupScreen.lastAutomaticBackup', {
-                time: dayjs(lastAutomaticBackupAt).fromNow(),
-              })}
-              theme={theme}
-            />
-          ) : null}
+          {/* Scheduled automatic backups need a native background task +
+              a persisted folder grant (SAF) — Android only for now. */}
+          {Platform.OS === 'android' && (
+            <>
+              <List.Item
+                title={getString('backupScreen.automaticBackupFrequency')}
+                description={getString(
+                  AUTOMATIC_BACKUP_LABELS[automaticBackupIntervalHours],
+                )}
+                onPress={automaticBackupDialog.setTrue}
+                theme={theme}
+              />
+              <List.Item
+                title={getString('backupScreen.automaticBackupLocation')}
+                description={
+                  automaticBackupDirectoryName ??
+                  `${NativeFile.ExternalDirectoryPath}/Backups`
+                }
+                onPress={selectAutomaticBackupDirectory}
+                theme={theme}
+              />
+              {lastAutomaticBackupAt ? (
+                <List.InfoItem
+                  title={getString('backupScreen.lastAutomaticBackup', {
+                    time: dayjs(lastAutomaticBackupAt).fromNow(),
+                  })}
+                  theme={theme}
+                />
+              ) : null}
+            </>
+          )}
         </List.Section>
       </ScrollView>
       <GoogleDriveModal
