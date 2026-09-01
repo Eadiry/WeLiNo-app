@@ -19,26 +19,29 @@ const updateNovelMetadata = async (
   novel: SourceNovel,
 ) => {
   const { name, summary, author, artist, genres, status, totalPages } = novel;
-  let cover = novel.cover;
   const novelDir = `${NOVEL_STORAGE}/${pluginId}/${novelId}`;
 
   if (!(await NativeFile.exists(novelDir))) {
     await NativeFile.mkdir(novelDir);
   }
 
-  if (cover) {
+  // Only overwrite the stored cover if a fresh one actually downloaded — a
+  // failed re-download must never wipe the cover that's already on screen.
+  let refreshedCover: string | undefined;
+  if (novel.cover) {
     const novelCoverPath = `${novelDir}/cover.png`;
     const novelCoverUri = `file://${novelCoverPath}`;
     try {
       await downloadFile(
-        cover,
+        novel.cover,
         novelCoverPath,
         getPlugin(pluginId)?.imageRequestInit,
       );
-      cover = `${novelCoverUri}?${Date.now()}`;
+      refreshedCover = `${novelCoverUri}?${Date.now()}`;
     } catch {
-      // If download fails, we fallback to what was there or null
-      cover = undefined;
+      // Couldn't cache it locally — fall back to the remote URL rather than
+      // dropping the cover entirely.
+      refreshedCover = novel.cover;
     }
   }
 
@@ -47,7 +50,7 @@ const updateNovelMetadata = async (
       .update(novelSchema)
       .set({
         name,
-        cover: cover || null,
+        ...(refreshedCover ? { cover: refreshedCover } : {}),
         summary: summary || null,
         author: author || 'unknown',
         artist: artist || null,

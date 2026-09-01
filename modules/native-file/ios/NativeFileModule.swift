@@ -97,8 +97,47 @@ public class NativeFileModule: Module {
     }
 
     AsyncFunction("downloadFile") { (url: String, destPath: String, method: String, headers: [String: String], body: String?, promise: Promise) in
-      // Stub — download implementation not ported for iOS
-      promise.reject("NOT_IMPLEMENTED", "downloadFile is not implemented on iOS")
+      guard let requestURL = URL(string: url) else {
+        promise.reject("DOWNLOAD_FAILED", "Invalid URL")
+        return
+      }
+
+      var request = URLRequest(url: requestURL)
+      request.httpMethod = method.isEmpty ? "GET" : method.uppercased()
+      for (key, value) in headers {
+        request.setValue(value, forHTTPHeaderField: key)
+      }
+      if request.httpMethod != "GET", let body = body {
+        request.httpBody = body.data(using: .utf8)
+      }
+
+      let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        if let error = error {
+          promise.reject("DOWNLOAD_FAILED", error.localizedDescription)
+          return
+        }
+        if let http = response as? HTTPURLResponse,
+           !(200...299).contains(http.statusCode) {
+          promise.reject("DOWNLOAD_FAILED", "HTTP \(http.statusCode)")
+          return
+        }
+        guard let data = data else {
+          promise.reject("DOWNLOAD_FAILED", "Empty response")
+          return
+        }
+        do {
+          let destURL = URL(fileURLWithPath: destPath)
+          try FileManager.default.createDirectory(
+            at: destURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+          )
+          try data.write(to: destURL, options: .atomic)
+          promise.resolve(nil)
+        } catch {
+          promise.reject("DOWNLOAD_FAILED", error.localizedDescription)
+        }
+      }
+      task.resume()
     }
 
     // Android Storage-Access-Framework pickers — not ported for iOS. These

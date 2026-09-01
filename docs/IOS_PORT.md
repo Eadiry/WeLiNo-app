@@ -213,9 +213,27 @@ is implemented (pre-existing limitation). No brightness slider (would need
   viewport-centre fraction of the chapter before the reflow and scrolls back
   to it afterwards (scroll mode).
 - **More voices** is an iOS limitation — `AVSpeechSynthesizer` only exposes
-  installed system voices; Google/Azure voices ("Christopher" etc.) would
-  need a cloud TTS integration. The voice picker now points users to iOS
-  Settings › Accessibility › Spoken Content › Voices.
+  installed system voices, and **Siri voices are never returned to
+  third-party apps**. Only the "Enhanced"/"Premium" downloadable voices show
+  up. `TTSTab` now re-reads the voice list when the picker opens and on app
+  foreground (a freshly downloaded voice isn't visible until then). Cloud TTS
+  (Azure/Google/ElevenLabs) would be a separate feature.
+
+### `NativeFile.downloadFile` implemented for iOS
+
+It was a `NOT_IMPLEMENTED` stub. Consequence: tapping **Refresh** on a novel
+(with "refresh metadata" on) ran `updateNovelMetadata`, whose cover
+re-download always threw, and the `catch` then wrote `cover: null` — wiping
+the cover. Fixes:
+
+- `modules/native-file/ios/NativeFileModule.swift` — real `downloadFile` via
+  `URLSession.dataTask` (method + headers + optional body, writes bytes to
+  `destPath`, creates parent dirs, checks HTTP status). Unblocks cover
+  refresh and chapter-image caching on iOS.
+- `src/services/updates/LibraryUpdateQueries.ts` `updateNovelMetadata` — a
+  failed cover download now falls back to the remote URL instead of `null`,
+  and the DB `.set()` omits `cover` entirely unless a fresh one resolved. A
+  broken refresh can no longer erase the cover.
 
 ### Remaining 1.5 work
 
