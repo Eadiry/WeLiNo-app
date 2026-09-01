@@ -66,12 +66,6 @@ workflows:
           npx expo prebuild --platform ios --clean --no-install
           echo "--- generated iOS project ---"
           ls -la ios
-          # Discover the workspace/scheme expo generated from app.json `name`.
-          WS=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -1)
-          SCHEME=$(basename "$WS" .xcworkspace)
-          echo "XCODE_WORKSPACE=$WS" >> "$CM_ENV"
-          echo "XCODE_SCHEME=$SCHEME" >> "$CM_ENV"
-          echo "workspace=$WS  scheme=$SCHEME"
 
       - name: Install CocoaPods (honouring the root Gemfile pins)
         script: |
@@ -93,9 +87,17 @@ workflows:
 
       - name: Build IPA
         script: |
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+          set -e
+          # The .xcworkspace only exists after `pod install`, so discover it
+          # here rather than in the prebuild step.
+          WS=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -1)
+          if [ -z "$WS" ]; then
+            echo "No .xcworkspace under ios/ — contents:"; ls -la ios; exit 1
+          fi
+          SCHEME=$(basename "$WS" .xcworkspace)
+          echo "workspace=$WS  scheme=$SCHEME"
+          xcodebuild -workspace "$WS" -list || true
+          xcode-project build-ipa --workspace "$WS" --scheme "$SCHEME"
 
     artifacts:
       - build/ios/ipa/*.ipa
