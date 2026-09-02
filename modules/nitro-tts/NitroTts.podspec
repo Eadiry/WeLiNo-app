@@ -37,6 +37,9 @@ Pod::Spec.new do |s|
     s.pod_target_xcconfig = {
       "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{slice_paths}",
     }
+    # sherpa-onnx + the bundled ONNX Runtime pull in the C++ runtime and BLAS.
+    s.libraries  = "c++"
+    s.frameworks = "Accelerate"
   end
 
   load "nitrogen/generated/ios/NitroTts+autolinking.rb"
