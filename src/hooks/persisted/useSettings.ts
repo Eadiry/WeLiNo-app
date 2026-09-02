@@ -218,6 +218,18 @@ export interface ChapterReaderSettings {
     pitch?: number;
     autoPageAdvance?: boolean;
     scrollToTop?: boolean;
+    /**
+     * iOS: which synthesis backend narrates. `'kokoro'` uses the on-device
+     * Kokoro engine (`kokoroEngineId` + `kokoroVoiceId`); anything else is the
+     * system `AVSpeechSynthesizer` (and `voice`).
+     */
+    engineKind?: 'system' | 'kokoro';
+    /** iOS + Kokoro: installed engine-bundle id from a voice repository. */
+    kokoroEngineId?: string;
+    /** iOS + Kokoro: selected Kokoro voice id (e.g. `af_heart`), for display. */
+    kokoroVoiceId?: string;
+    /** iOS + Kokoro: the voice's speaker index — what the native engine needs. */
+    kokoroSpeakerId?: number;
   };
   epubLocation: string;
   epubUseAppTheme: boolean;

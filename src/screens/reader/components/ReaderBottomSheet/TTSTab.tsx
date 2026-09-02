@@ -20,6 +20,10 @@ import {
 import { getString } from '@i18n/translations';
 import { Chip } from 'react-native-paper';
 import ReaderSheetPreferenceItem from './ReaderSheetPreferenceItem';
+import {
+  listInstalledKokoroVoices,
+  type InstalledKokoroVoice,
+} from '@services/tts/voiceRepository';
 
 interface VoicePickerModalProps {
   visible: boolean;
@@ -305,6 +309,85 @@ const EnginePickerModal: React.FC<EnginePickerModalProps> = ({
   );
 };
 
+interface KokoroVoicePickerModalProps {
+  visible: boolean;
+  onDismiss: () => void;
+  voices: InstalledKokoroVoice[];
+  currentVoiceId?: string;
+  onSelect: (voice: InstalledKokoroVoice) => void;
+}
+
+const KokoroVoicePickerModal: React.FC<KokoroVoicePickerModalProps> = ({
+  visible,
+  onDismiss,
+  voices,
+  currentVoiceId,
+  onSelect,
+}) => {
+  const theme = useTheme();
+  return (
+    <Dialog.Root
+      visible={visible}
+      onDismiss={onDismiss}
+      surfaceStyle={styles.modalContent}
+    >
+      <Dialog.Title>Kokoro voice</Dialog.Title>
+      <Dialog.ScrollArea>
+        <ScrollView style={styles.voiceList}>
+          {voices.length === 0 ? (
+            <Text
+              style={[styles.noVoicesText, { color: theme.onSurfaceVariant }]}
+            >
+              No Kokoro voices installed. Add a voice repository in Settings ›
+              Voice repositories.
+            </Text>
+          ) : (
+            voices.map(voice => (
+              <Pressable
+                key={voice.id}
+                style={[
+                  styles.voiceItem,
+                  currentVoiceId === voice.id && {
+                    backgroundColor: theme.surfaceVariant,
+                  },
+                ]}
+                onPress={() => {
+                  onSelect(voice);
+                  onDismiss();
+                }}
+              >
+                <View style={styles.voiceItemContent}>
+                  <Text
+                    style={[styles.voiceItemText, { color: theme.onSurface }]}
+                  >
+                    {voice.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.voiceItemLanguage,
+                      { color: theme.onSurfaceVariant },
+                    ]}
+                  >
+                    {voice.language ?? voice.engineName}
+                  </Text>
+                </View>
+                {currentVoiceId === voice.id ? (
+                  <Text style={[styles.checkIcon, { color: theme.primary }]}>
+                    ✓
+                  </Text>
+                ) : null}
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+      </Dialog.ScrollArea>
+      <Dialog.Actions>
+        <Dialog.Action onPress={onDismiss}>Cancel</Dialog.Action>
+      </Dialog.Actions>
+    </Dialog.Root>
+  );
+};
+
 const TTSTab: React.FC = () => {
   const theme = useTheme();
   const { TTSEnable = true, setChapterGeneralSettings } =
@@ -315,6 +398,10 @@ const TTSTab: React.FC = () => {
   const [voices, setVoices] = useState<TtsVoice[]>([]);
   const [engineModalVisible, setEngineModalVisible] = useState(false);
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [kokoroVoices, setKokoroVoices] = useState<InstalledKokoroVoice[]>([]);
+  const [kokoroModalVisible, setKokoroModalVisible] = useState(false);
+  const engineKind = tts?.engineKind === 'kokoro' ? 'kokoro' : 'system';
+  const kokoroAvailable = Platform.OS === 'ios' && kokoroVoices.length > 0;
 
   // Android only; resolves empty on iOS, which hides the Engine row below.
   useEffect(() => {
@@ -351,6 +438,33 @@ const TTSTab: React.FC = () => {
     return () => sub.remove();
   }, [loadVoices]);
 
+  // Installed on-device Kokoro voices (iOS). Refetched on mount, on foreground
+  // and whenever a picker opens — a bundle may have finished downloading.
+  const loadKokoroVoices = useCallback(() => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+    listInstalledKokoroVoices()
+      .then(setKokoroVoices)
+      .catch(() => setKokoroVoices([]));
+  }, []);
+
+  useEffect(() => {
+    loadKokoroVoices();
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        loadKokoroVoices();
+      }
+    });
+    return () => sub.remove();
+  }, [loadKokoroVoices]);
+
+  useEffect(() => {
+    if (engineModalVisible || kokoroModalVisible) {
+      loadKokoroVoices();
+    }
+  }, [engineModalVisible, kokoroModalVisible, loadKokoroVoices]);
+
   const handleEngineSelect = useCallback(
     (engine?: TtsEngine) => {
       // Voice identifiers are engine-scoped, so switching engines clears the
@@ -368,6 +482,46 @@ const TTSTab: React.FC = () => {
     },
     [tts, setChapterReaderSettings],
   );
+
+  const selectEngineKind = useCallback(
+    (kind: 'system' | 'kokoro') => {
+      if (kind === 'kokoro') {
+        const first = kokoroVoices[0];
+        setChapterReaderSettings({
+          tts: {
+            ...tts,
+            engineKind: 'kokoro',
+            kokoroEngineId: tts?.kokoroEngineId ?? first?.engineId,
+            kokoroVoiceId: tts?.kokoroVoiceId ?? first?.id,
+            kokoroSpeakerId: tts?.kokoroSpeakerId ?? first?.speakerId,
+          },
+        });
+      } else {
+        setChapterReaderSettings({ tts: { ...tts, engineKind: 'system' } });
+      }
+      setEngineModalVisible(false);
+    },
+    [kokoroVoices, tts, setChapterReaderSettings],
+  );
+
+  const handleKokoroVoiceSelect = useCallback(
+    (voice: InstalledKokoroVoice) => {
+      setChapterReaderSettings({
+        tts: {
+          ...tts,
+          engineKind: 'kokoro',
+          kokoroEngineId: voice.engineId,
+          kokoroVoiceId: voice.id,
+          kokoroSpeakerId: voice.speakerId,
+        },
+      });
+    },
+    [tts, setChapterReaderSettings],
+  );
+
+  const currentKokoroVoiceName =
+    kokoroVoices.find(v => v.id === tts?.kokoroVoiceId)?.name ??
+    tts?.kokoroVoiceId;
 
   return (
     <>
@@ -398,13 +552,39 @@ const TTSTab: React.FC = () => {
                 />
               ) : null}
 
-              <List.Item
-                title="Voice"
-                description={tts?.voice?.name || 'System default'}
-                onPress={() => setVoiceModalVisible(true)}
-                right="chevron-right"
-                theme={theme}
-              />
+              {kokoroAvailable ? (
+                <List.Item
+                  title="Engine"
+                  description={
+                    engineKind === 'kokoro'
+                      ? 'Kokoro (on-device)'
+                      : 'System default'
+                  }
+                  onPress={() => setEngineModalVisible(true)}
+                  right="chevron-right"
+                  theme={theme}
+                />
+              ) : null}
+
+              {engineKind === 'kokoro' ? (
+                <List.Item
+                  title="Voice"
+                  description={
+                    currentKokoroVoiceName || 'Select a Kokoro voice'
+                  }
+                  onPress={() => setKokoroModalVisible(true)}
+                  right="chevron-right"
+                  theme={theme}
+                />
+              ) : (
+                <List.Item
+                  title="Voice"
+                  description={tts?.voice?.name || 'System default'}
+                  onPress={() => setVoiceModalVisible(true)}
+                  right="chevron-right"
+                  theme={theme}
+                />
+              )}
 
               <View style={styles.sliderSection}>
                 <Text style={[styles.sliderLabel, { color: theme.onSurface }]}>
@@ -479,19 +659,75 @@ const TTSTab: React.FC = () => {
         <View style={styles.bottomSpacing} />
       </BottomSheetScrollView>
 
-      <EnginePickerModal
-        visible={engineModalVisible}
-        onDismiss={() => setEngineModalVisible(false)}
-        engines={engines}
-        onSelect={handleEngineSelect}
-        currentEngine={tts?.engine}
-      />
+      {engines.length > 0 ? (
+        <EnginePickerModal
+          visible={engineModalVisible}
+          onDismiss={() => setEngineModalVisible(false)}
+          engines={engines}
+          onSelect={handleEngineSelect}
+          currentEngine={tts?.engine}
+        />
+      ) : null}
+
+      {kokoroAvailable ? (
+        <Dialog.Root
+          visible={engineModalVisible}
+          onDismiss={() => setEngineModalVisible(false)}
+          surfaceStyle={styles.modalContent}
+        >
+          <Dialog.Title>Engine</Dialog.Title>
+          <Dialog.ScrollArea>
+            <ScrollView style={styles.voiceList}>
+              {(['system', 'kokoro'] as const).map(kind => (
+                <Pressable
+                  key={kind}
+                  style={[
+                    styles.voiceItem,
+                    engineKind === kind && {
+                      backgroundColor: theme.surfaceVariant,
+                    },
+                  ]}
+                  onPress={() => selectEngineKind(kind)}
+                >
+                  <View style={styles.voiceItemContent}>
+                    <Text
+                      style={[styles.voiceItemText, { color: theme.onSurface }]}
+                    >
+                      {kind === 'kokoro'
+                        ? 'Kokoro (on-device)'
+                        : 'System default'}
+                    </Text>
+                  </View>
+                  {engineKind === kind ? (
+                    <Text style={[styles.checkIcon, { color: theme.primary }]}>
+                      ✓
+                    </Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Dialog.Action onPress={() => setEngineModalVisible(false)}>
+              Cancel
+            </Dialog.Action>
+          </Dialog.Actions>
+        </Dialog.Root>
+      ) : null}
+
       <VoicePickerModal
         visible={voiceModalVisible}
         onDismiss={() => setVoiceModalVisible(false)}
         voices={voices}
         onSelect={handleVoiceSelect}
         currentVoice={tts?.voice}
+      />
+      <KokoroVoicePickerModal
+        visible={kokoroModalVisible}
+        onDismiss={() => setKokoroModalVisible(false)}
+        voices={kokoroVoices}
+        currentVoiceId={tts?.kokoroVoiceId}
+        onSelect={handleKokoroVoiceSelect}
       />
     </>
   );

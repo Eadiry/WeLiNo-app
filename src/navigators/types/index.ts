@@ -83,6 +83,7 @@ export type SettingsStackParamList = {
   AdvancedSettings: undefined;
   LibrarySettings: undefined;
   RespositorySettings: { url?: string } | undefined;
+  VoiceRepositorySettings: { url?: string } | undefined;
   CustomCode: undefined;
   CodeSnippets: { snippetIndex: number; isJS: boolean } | undefined;
   GenreTaxonomy: undefined;
@@ -195,6 +196,11 @@ export type GenreTaxonomyScreenProps = CompositeScreenProps<
 
 export type RespositorySettingsScreenProps = CompositeScreenProps<
   NativeStackScreenProps<SettingsStackParamList, 'RespositorySettings'>,
+  NativeStackScreenProps<RootStackParamList, 'BottomNavigator'>
+>;
+
+export type VoiceRepositorySettingsScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<SettingsStackParamList, 'VoiceRepositorySettings'>,
   NativeStackScreenProps<RootStackParamList, 'BottomNavigator'>
 >;
 

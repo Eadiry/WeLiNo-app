@@ -68,6 +68,17 @@ const SettingsScreen = ({ navigation }: SettingsScreenProps) => {
           theme={theme}
         />
         <List.Item
+          title="Voice repositories"
+          description="On-device Kokoro TTS voices"
+          icon="account-voice"
+          onPress={() =>
+            navigation.navigate('SettingsStack', {
+              screen: 'VoiceRepositorySettings',
+            })
+          }
+          theme={theme}
+        />
+        <List.Item
           title="Custom Code"
           icon="code-braces"
           onPress={() => navigation.navigate('CustomCode')}

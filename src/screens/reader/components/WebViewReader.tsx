@@ -40,6 +40,7 @@ import {
   isPluginIssueReportUrl,
 } from '../utils/sanitizeChapterText';
 import { READER_CSS, READER_SCRIPTS } from '../utils/readerAssets';
+import { engineDir } from '@services/tts/voiceRepository';
 
 export type WebViewPostEvent = {
   type: string;
@@ -88,12 +89,26 @@ const areTTSSettingsEqual = (
 
 const toNativeTtsSettings = (
   settings: ChapterReaderSettings['tts'],
-): TtsSettings => ({
-  engineName: settings?.engine?.name,
-  voiceIdentifier: settings?.voice?.identifier,
-  rate: settings?.rate ?? 1,
-  pitch: settings?.pitch ?? 1,
-});
+): TtsSettings => {
+  // iOS on-device Kokoro: the native engine reads `kokoroModelDir` and takes
+  // the speaker index through `voiceIdentifier`.
+  if (settings?.engineKind === 'kokoro' && settings.kokoroEngineId) {
+    return {
+      engineKind: 'kokoro',
+      kokoroModelDir: engineDir(settings.kokoroEngineId),
+      voiceIdentifier: String(settings.kokoroSpeakerId ?? 0),
+      rate: settings?.rate ?? 1,
+      pitch: settings?.pitch ?? 1,
+    };
+  }
+  return {
+    engineKind: 'system',
+    engineName: settings?.engine?.name,
+    voiceIdentifier: settings?.voice?.identifier,
+    rate: settings?.rate ?? 1,
+    pitch: settings?.pitch ?? 1,
+  };
+};
 
 /**
  * The adjacent chapters are resolved after the chapter itself is on screen, so

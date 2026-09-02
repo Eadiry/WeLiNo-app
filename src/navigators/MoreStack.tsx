@@ -16,6 +16,7 @@ import CategoriesScreen from '@screens/Categories/CategoriesScreen';
 import SettingsCustomCode from '@screens/settings/SettingsCustomCodeScreen';
 import CodeSnippetsScreen from '@screens/settings/SettingsCustomCodeScreen/CodeSnippetsScreen';
 import RespositorySettings from '@screens/settings/SettingsRepositoryScreen/SettingsRepositoryScreen';
+import VoiceRepositorySettings from '@screens/settings/SettingsVoiceRepositoryScreen/SettingsVoiceRepositoryScreen';
 import LibrarySettings from '@screens/settings/SettingsLibraryScreen/SettingsLibraryScreen';
 import StatsScreen from '@screens/StatsScreen/StatsScreen';
 import GenreTaxonomyScreen from '@screens/settings/SettingsTaxonomyScreen/SettingsTaxonomyScreen';
@@ -58,6 +59,10 @@ const SettingsStack = () => {
       <Stack.Screen
         name="RespositorySettings"
         component={RespositorySettings}
+      />
+      <Stack.Screen
+        name="VoiceRepositorySettings"
+        component={VoiceRepositorySettings}
       />
       <Stack.Screen name="LibrarySettings" component={LibrarySettings} />
       <Stack.Screen name="CustomCode" component={SettingsCustomCode} />
