@@ -134,6 +134,15 @@ workflows:
           bundle install --jobs 4
           cd ios
           bundle exec pod install 2>&1 | tee "$CM_BUILD_DIR/pod-install.log"
+          # Did the SherpaOnnxC link flags actually reach the xcconfigs?
+          {
+            echo "=== NitroTts.release.xcconfig ==="
+            cat "Pods/Target Support Files/NitroTts/NitroTts.release.xcconfig" 2>&1
+            echo "=== Pods-WeLiNo.release.xcconfig (Sherpa lines) ==="
+            grep -n -i sherpa "Pods/Target Support Files/Pods-WeLiNo/Pods-WeLiNo.release.xcconfig" 2>&1
+            echo "=== project.pbxproj Sherpa refs ==="
+            grep -c -i sherpa Pods/Pods.xcodeproj/project.pbxproj 2>&1
+          } | tee -a "$CM_BUILD_DIR/pod-install.log"
 
       - name: Set up code signing
         script: xcode-project use-profiles
