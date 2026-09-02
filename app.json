@@ -85,6 +85,9 @@
     "ios": {
       "bundleIdentifier": "com.welino.reader",
       "supportsTablet": true,
+      "entitlements": {
+        "com.apple.developer.kernel.increased-memory-limit": true
+      },
       "infoPlist": {
         "UIBackgroundModes": ["audio"],
         "ITSAppUsesNonExemptEncryption": false,

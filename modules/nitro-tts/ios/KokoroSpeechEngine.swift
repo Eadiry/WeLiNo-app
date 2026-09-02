@@ -116,16 +116,7 @@ final class KokoroSpeechEngine {
 
   func speak(text: String, settings: TtsSettings) {
     guard let modelDir = settings.kokoroModelDir, !modelDir.isEmpty else {
-      onError?("No Kokoro model is installed.")
-      return
-    }
-    do {
-      try prepare(modelDir: modelDir)
-    } catch let error as KokoroError {
-      onError?(error.message)
-      return
-    } catch {
-      onError?(error.localizedDescription)
+      emitError("No Kokoro model is installed.")
       return
     }
 
@@ -138,14 +129,27 @@ final class KokoroSpeechEngine {
     let speakerId = Int32(settings.voiceIdentifier.flatMap { Int($0) } ?? 0)
     // Kokoro's "speed" is inverse of length; keep it in a sane band.
     let speed = Float(min(max(settings.rate, 0.5), 2.0))
-
-    startAudioGraphIfNeeded()
-    playerNode.play()
-
     let sentences = Self.splitIntoSentences(text)
 
+    // The model loads on first use (tens/hundreds of MB) — do it, and every
+    // inference, on the work queue so the caller/main thread never stalls.
     workQueue.async { [weak self] in
-      guard let self else { return }
+      guard let self, gen == self.generation else { return }
+
+      do {
+        try self.prepare(modelDir: modelDir)
+      } catch let error as KokoroError {
+        self.emitError(error.message)
+        return
+      } catch {
+        self.emitError(error.localizedDescription)
+        return
+      }
+      guard gen == self.generation else { return }
+
+      self.startAudioGraphIfNeeded()
+      self.playerNode.play()
+
       for sentence in sentences {
         if gen != self.generation { return }
         #if canImport(SherpaOnnxC)
@@ -197,6 +201,26 @@ final class KokoroSpeechEngine {
     }
   }
 
+  /// Frees the ONNX model and tears the audio graph down. Call this when
+  /// narration *fully* stops — NOT between paragraphs (`stop()` deliberately
+  /// keeps the model so the next paragraph doesn't pay the reload cost). Leaving
+  /// the model resident after playback is what pushed the app into a jetsam.
+  func releaseResources() {
+    stop()  // immediate silence; bumps `generation` so in-flight work bails
+    workQueue.async { [weak self] in
+      guard let self else { return }
+      if self.audioEngine.attachedNodes.contains(self.playerNode) {
+        self.audioEngine.detach(self.playerNode)
+      }
+      self.destroyHandle()
+      self.loadedModelDir = nil
+    }
+  }
+
+  private func emitError(_ message: String) {
+    DispatchQueue.main.async { [weak self] in self?.onError?(message) }
+  }
+
   // MARK: - Audio graph
 
   private func startAudioGraphIfNeeded() {
@@ -214,7 +238,9 @@ final class KokoroSpeechEngine {
       do {
         try audioEngine.start()
       } catch {
-        onError?("Kokoro audio engine failed to start: \(error.localizedDescription)")
+        emitError(
+          "Kokoro audio engine failed to start: \(error.localizedDescription)"
+        )
       }
     }
   }

@@ -231,6 +231,9 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
   func stop() {
     precondition(Thread.isMainThread)
     interruptSpeech()
+    // Narration is fully over — free the Kokoro model (tens/hundreds of MB).
+    // `interruptSpeech()` only stops the current utterance and keeps it loaded.
+    kokoroEngine?.releaseResources()
     paragraphs = []
     currentIndex = 0
     metadata = nil

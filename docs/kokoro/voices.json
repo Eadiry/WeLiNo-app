@@ -4,7 +4,7 @@
     "name": "Kokoro 82M v1.0",
     "format": "sherpa-onnx-kokoro",
     "bundleUrl": "https://github.com/Eadiry/WeLiNo-app/releases/download/kokoro-v1_0-en/kokoro-v1_0-en.zip",
-    "bundleBytes": 155000000
+    "bundleBytes": 120000000
   },
   "voices": [
     {
