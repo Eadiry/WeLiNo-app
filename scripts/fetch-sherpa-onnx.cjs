@@ -109,9 +109,21 @@ function main() {
   const zip = path.join(tmp, ASSET);
 
   log(`downloading ${URL}`);
-  run(`curl -L --fail -o "${zip}" "${URL}"`);
+  run(
+    `curl -L --fail --show-error --retry 3 --retry-delay 2 ` +
+      `--connect-timeout 30 -w '[fetch-sherpa-onnx] http %{http_code}, %{size_download} bytes\\n' ` +
+      `-o "${zip}" "${URL}"`,
+  );
+  const bytes = fs.statSync(zip).size;
+  log(`downloaded ${bytes} bytes`);
+  if (bytes < 1_000_000) {
+    throw new Error(
+      `download is only ${bytes} bytes — not the expected ~30 MB zip.`,
+    );
+  }
   log('extracting');
   run(`unzip -q "${zip}" -d "${tmp}"`);
+  log(`extracted top level: ${fs.readdirSync(tmp).join(', ')}`);
 
   // The zip may wrap the xcframework in a folder; find it at any depth.
   const found = execSync(

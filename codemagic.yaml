@@ -98,11 +98,15 @@ workflows:
 
       - name: Vendor sherpa-onnx (on-device Kokoro TTS)
         script: |
-          # Downloads the prebuilt sherpa-onnx + onnxruntime xcframeworks into
+          # Downloads the prebuilt SherpaOnnxC.xcframework into
           # modules/nitro-tts/ios/vendor/ (cached). If it fails, the build still
           # succeeds — KokoroSpeechEngine.swift compiles as a no-op and the app
-          # ships with Kokoro unavailable.
-          node scripts/fetch-sherpa-onnx.cjs || true
+          # ships with Kokoro unavailable. Output is teed to an artifact because
+          # this pre-build step is otherwise invisible outside the Codemagic UI.
+          node scripts/fetch-sherpa-onnx.cjs 2>&1 | tee "$CM_BUILD_DIR/sherpa-vendor.log" || true
+          echo "--- modules/nitro-tts/ios/vendor ---" | tee -a "$CM_BUILD_DIR/sherpa-vendor.log"
+          ls -la modules/nitro-tts/ios/vendor 2>&1 | tee -a "$CM_BUILD_DIR/sherpa-vendor.log" || true
+          find modules/nitro-tts/ios/vendor -maxdepth 4 2>&1 | tee -a "$CM_BUILD_DIR/sherpa-vendor.log" || true
 
       - name: Prepare ccache
         script: |
@@ -129,7 +133,7 @@ workflows:
           bundle config set --local path "vendor/bundle"
           bundle install --jobs 4
           cd ios
-          bundle exec pod install
+          bundle exec pod install 2>&1 | tee "$CM_BUILD_DIR/pod-install.log"
 
       - name: Set up code signing
         script: xcode-project use-profiles
@@ -158,6 +162,8 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - ios/Podfile.lock
+      - sherpa-vendor.log
+      - pod-install.log
 
     publishing:
       app_store_connect:
