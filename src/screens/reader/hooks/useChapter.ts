@@ -399,6 +399,11 @@ export default function useChapter(
   /**
    * Narration crossed into `chapterId`. Move the reader there without stopping
    * the (native, still-playing) session, and mark the chapter it left read.
+   *
+   * Only the read flag is touched — not `progress`. Narration moving past a
+   * chapter should not shove its reading bookmark to 100%, or reopening that
+   * chapter later would drop the user at the very end instead of where they
+   * were reading.
    */
   const setChapterFromTts = useCallback(
     async (chapterId: string) => {
@@ -412,13 +417,12 @@ export default function useChapter(
         return;
       }
       if (!incognitoMode) {
-        updateChapterProgress(leaving, 100);
         markChapterRead(leaving);
       }
       ttsDrivenChapterChangeRef.current = true;
       await getChapter(row);
     },
-    [getChapter, incognitoMode, markChapterRead, updateChapterProgress],
+    [getChapter, incognitoMode, markChapterRead],
   );
 
   const searchChapterText = useCallback(

@@ -257,15 +257,13 @@ const WebViewReader: React.FC<WebViewReaderProps> = ({
   useEffect(() => {
     if (activeChapterIdRef.current !== chapter.id) {
       activeChapterIdRef.current = chapter.id;
-      // A chapter change driven by narration crossing a boundary must not tear
-      // down the still-playing native session.
-      if (ttsDrivenChapterChangeRef.current) {
-        ttsDrivenChapterChangeRef.current = false;
-      } else {
-        runTtsCommand('stop');
-      }
+      // Switching chapters never tears down the native TTS session — whether
+      // the switch came from narration crossing a boundary or from the reader
+      // footer / drawer. Audio is decoupled from what the reader is showing
+      // (it keeps going via the mini-player and the lock-screen controls).
+      ttsDrivenChapterChangeRef.current = false;
     }
-  }, [chapter.id, runTtsCommand, ttsDrivenChapterChangeRef]);
+  }, [chapter.id, ttsDrivenChapterChangeRef]);
 
   useEffect(() => {
     const script = buildAdjacentChapterScript(nextChapter, prevChapter);

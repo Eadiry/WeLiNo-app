@@ -140,15 +140,23 @@ window.reader = new (function () {
 
   document.onscrollend = () => {
     onUserInteraction();
-    if (!this.generalSettings.val.pageReader) {
-      this.post({
-        type: 'save',
-        data: parseInt(
-          ((window.scrollY + this.layoutHeight) / this.chapterHeight) * 100,
-          10,
-        ),
-      });
+    if (this.generalSettings.val.pageReader) {
+      return;
     }
+    // A scroll the TTS engine started to keep the spoken paragraph on screen
+    // must not overwrite the manual reading bookmark. The native TTS queue
+    // tracks the narration position itself; the reader should reopen where the
+    // user was *reading*, not wherever narration had scrolled to.
+    if (window.tts && Date.now() - (window.tts._lastAutoScrollAt || 0) < 1500) {
+      return;
+    }
+    this.post({
+      type: 'save',
+      data: parseInt(
+        ((window.scrollY + this.layoutHeight) / this.chapterHeight) * 100,
+        10,
+      ),
+    });
   };
 
   document.onpointerdown = () => onUserInteraction();
@@ -503,6 +511,10 @@ window.tts = new (function () {
   // UPDATED: Scroll to top or center based on settings with padding for notch/camera
   this.scrollToElement = element => {
     if (!element) return;
+    // Tag this as a TTS-initiated scroll/page-turn so the reading-position
+    // autosave leaves the manual bookmark alone (see `document.onscrollend`
+    // and `movePage`'s `save` option).
+    this._lastAutoScrollAt = Date.now();
     // Check if element is partially visible (at least some part is in viewport)
     const rect = element.getBoundingClientRect();
     if (reader.generalSettings.val.pageReader) {
@@ -517,6 +529,7 @@ window.tts = new (function () {
             pageReader.page.val + relativePage,
           ),
         ),
+        { save: false },
       );
       return;
     }
