@@ -25,14 +25,14 @@ Pod::Spec.new do |s|
   # static-linkage project, so the xcframework's slice dirs are put on
   # FRAMEWORK_SEARCH_PATHS explicitly. Set here (before nitrogen), which
   # merge-preserves it.
-  vendor_xcf = File.join(__dir__, "ios", "vendor", "sherpa-onnx.xcframework")
+  vendor_xcf = File.join(__dir__, "ios", "vendor", "SherpaOnnxC.xcframework")
   if File.exist?(File.join(vendor_xcf, "Info.plist"))
-    s.vendored_frameworks = "ios/vendor/sherpa-onnx.xcframework"
+    s.vendored_frameworks = "ios/vendor/SherpaOnnxC.xcframework"
     slice_paths =
       Dir.glob(File.join(vendor_xcf, "ios-*"))
         .select { |p| File.directory?(p) }
         .sort # "ios-arm64" (device) before "ios-arm64_x86_64-simulator"
-        .map { |p| "\"$(PODS_TARGET_SRCROOT)/ios/vendor/sherpa-onnx.xcframework/#{File.basename(p)}\"" }
+        .map { |p| "\"$(PODS_TARGET_SRCROOT)/ios/vendor/SherpaOnnxC.xcframework/#{File.basename(p)}\"" }
         .join(" ")
     s.pod_target_xcconfig = {
       "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{slice_paths}",

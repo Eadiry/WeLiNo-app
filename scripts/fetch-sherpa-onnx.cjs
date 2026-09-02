@@ -37,8 +37,13 @@ const VENDOR_DIR = path.join(
 );
 const ASSET = `sherpa-onnx-v${VERSION}-ios-static.xcframework.zip`;
 const URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/xcframework/${ASSET}`;
-/** Stable name the podspec expects, regardless of what the zip calls it. */
-const DEST_NAME = 'sherpa-onnx.xcframework';
+/**
+ * Stable name the podspec expects. MUST match the framework inside
+ * (`SherpaOnnxC.framework`) so CocoaPods emits `-framework SherpaOnnxC` at
+ * link time — the zip's own outer dir is `sherpa-onnx.xcframework`, which made
+ * the linker miss it.
+ */
+const DEST_NAME = 'SherpaOnnxC.xcframework';
 
 const log = msg => process.stdout.write(`[fetch-sherpa-onnx] ${msg}\n`);
 const run = (cmd, cwd) => execSync(cmd, { stdio: 'inherit', cwd });
@@ -69,7 +74,12 @@ function main() {
   if (!xcf) {
     throw new Error(`no *.xcframework found inside ${ASSET}.`);
   }
-  fs.rmSync(dest, { recursive: true, force: true });
+  // Clear any older-named xcframework left in the cache from a previous layout.
+  for (const name of fs.readdirSync(VENDOR_DIR)) {
+    if (name.endsWith('.xcframework')) {
+      fs.rmSync(path.join(VENDOR_DIR, name), { recursive: true, force: true });
+    }
+  }
   run(`cp -R "${path.join(tmp, xcf)}" "${dest}"`);
   fs.rmSync(tmp, { recursive: true, force: true });
   log(`vendored ${DEST_NAME}`);
