@@ -3,6 +3,7 @@ import { novel } from './novel';
 import { chapter } from './chapter';
 import { novelCategory } from './novelCategory';
 import { repository } from './repository';
+import { voiceRepository } from './voiceRepository';
 
 export {
   category as categorySchema,
@@ -25,6 +26,11 @@ export {
   type RepositoryRow,
   type RepositoryInsert,
 } from './repository';
+export {
+  voiceRepository as voiceRepositorySchema,
+  type VoiceRepositoryRow,
+  type VoiceRepositoryInsert,
+} from './voiceRepository';
 
 /**
  * Unified schema object containing all database tables
@@ -36,6 +42,7 @@ export const schema = {
   chapter,
   novelCategory,
   repository,
+  voiceRepository,
 } as const;
 
 export type Schema = typeof schema;

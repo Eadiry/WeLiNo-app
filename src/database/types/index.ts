@@ -130,3 +130,9 @@ export interface Repository {
   url: string;
   enabled: boolean;
 }
+
+export interface VoiceRepository {
+  id: number;
+  url: string;
+  enabled: boolean;
+}
