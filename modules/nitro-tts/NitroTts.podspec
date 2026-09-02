@@ -21,22 +21,36 @@ Pod::Spec.new do |s|
   # When absent, `KokoroSpeechEngine.swift` compiles as a no-op via
   # `#if canImport(SherpaOnnxC)` and the app ships with Kokoro unavailable.
   #
-  # `vendored_frameworks` alone did NOT make `import SherpaOnnxC` resolve in a
-  # static-linkage project, so the xcframework's slice dirs are put on
-  # FRAMEWORK_SEARCH_PATHS explicitly. Set here (before nitrogen), which
-  # merge-preserves it.
+  # In this static-linkage project, `vendored_frameworks` alone got neither
+  # `import SherpaOnnxC` (compile) nor `-framework SherpaOnnxC` (app link)
+  # wired up, so both search path and link flag are set explicitly — on the
+  # pod for compilation, and on the *app* target (user_target_xcconfig) for the
+  # final link, which is where `_SherpaOnnx*` was coming up undefined.
   vendor_xcf = File.join(__dir__, "ios", "vendor", "SherpaOnnxC.xcframework")
   if File.exist?(File.join(vendor_xcf, "Info.plist"))
     s.vendored_frameworks = "ios/vendor/SherpaOnnxC.xcframework"
-    slice_paths =
+
+    slices =
       Dir.glob(File.join(vendor_xcf, "ios-*"))
         .select { |p| File.directory?(p) }
-        .sort # "ios-arm64" (device) before "ios-arm64_x86_64-simulator"
-        .map { |p| "\"$(PODS_TARGET_SRCROOT)/ios/vendor/SherpaOnnxC.xcframework/#{File.basename(p)}\"" }
-        .join(" ")
+        .map { |p| File.basename(p) }
+        .sort # "ios-arm64" (device) first
+
+    pod_paths = slices
+      .map { |b| "\"$(PODS_TARGET_SRCROOT)/ios/vendor/SherpaOnnxC.xcframework/#{b}\"" }
+      .join(" ")
+    app_paths = slices
+      .map { |b| "\"$(PODS_ROOT)/../../modules/nitro-tts/ios/vendor/SherpaOnnxC.xcframework/#{b}\"" }
+      .join(" ")
+
     s.pod_target_xcconfig = {
-      "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{slice_paths}",
+      "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{pod_paths}",
     }
+    s.user_target_xcconfig = {
+      "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{app_paths}",
+      "OTHER_LDFLAGS" => "$(inherited) -framework SherpaOnnxC",
+    }
+
     # sherpa-onnx + the bundled ONNX Runtime pull in the C++ runtime and BLAS.
     s.libraries  = "c++"
     s.frameworks = "Accelerate"
