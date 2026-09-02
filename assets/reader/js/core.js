@@ -624,9 +624,11 @@ window.pageReader = new (function () {
     }
     destPage = parseInt(destPage, 10);
     if (destPage < 0) {
-      if (!reader.prevChapter) return;
+      // Don't gate on `reader.prevChapter` — it may not be injected yet when a
+      // fast swipe fires. Ask RN; it toasts if there really is no previous
+      // chapter, and we un-stick the transition screen if nothing loads.
       document.getElementsByClassName('transition-chapter')[0].innerText =
-        reader.prevChapter.name;
+        reader.prevChapter?.name ?? '';
       this.showChapterEnding(true, false, true);
       this.chapterNavigationPending = true;
       setTimeout(() => {
@@ -634,6 +636,12 @@ window.pageReader = new (function () {
         // last page, not its saved position.
         reader.post({ type: 'prev', data: { openAtEnd: true } });
       }, 200);
+      setTimeout(() => {
+        if (this.chapterNavigationPending) {
+          this.chapterNavigationPending = false;
+          this.showChapterEnding(false, false, true);
+        }
+      }, 1500);
       return;
     }
     if (destPage >= this.totalPages.val) {
@@ -705,7 +713,14 @@ window.pageReader = new (function () {
         ) - 1,
       ),
     );
+    // Jump straight to the restored page — no animated slide from page 0, which
+    // reads as a "shuffle" when you flip back into the end of a chapter.
+    const savedTransition = reader.chapterElement.style.transition;
+    reader.chapterElement.style.transition = 'none';
     this.movePage(destination, { interaction: false, save: false });
+    requestAnimationFrame(() => {
+      reader.chapterElement.style.transition = savedTransition || '';
+    });
   };
 
   van.derive(() => {
@@ -850,6 +865,9 @@ const restoreReadingPosition = () => {
     setTimeout(() => {
       positionRestored = true;
       calculatePages();
+      // Reveal the chapter only once it's at the restored position, so it
+      // never flashes at the top / page 0 first.
+      document.body.classList.add('reading-position-restored');
       // Deliberately not awaited before restoring: `document.fonts.ready` does
       // not resolve until the document has finished loading, which is what this
       // is trying to avoid waiting for.
@@ -952,8 +970,8 @@ window.addEventListener('load', () => {
   this.startTime = 0;
   // Horizontal drag past this fraction of the width, OR a quick flick, turns
   // the page. Lower than it used to be so short swipes register.
-  const PAGE_TURN_FRACTION = 0.16;
-  const FLICK_VELOCITY = 0.35; // px per ms
+  const PAGE_TURN_FRACTION = 0.12;
+  const FLICK_VELOCITY = 0.25; // px per ms
   const PAGE_EASING = 'transform 230ms cubic-bezier(0.22, 0.61, 0.36, 1)';
 
   reader.chapterElement.addEventListener('touchstart', e => {

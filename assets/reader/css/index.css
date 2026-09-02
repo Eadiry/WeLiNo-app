@@ -4,6 +4,12 @@ html {
   word-wrap: break-word;
 }
 
+/* Keep the chapter hidden until it's scrolled/paged to the restored position,
+   so it never flashes at the top first. */
+body:not(.reading-position-restored) #LNReader-chapter {
+  visibility: hidden;
+}
+
 ::selection {
   color: var(--theme-onSecondary);
   background-color: var(--theme-secondary);
@@ -166,11 +172,7 @@ td {
 mark.lnreader-search-match {
   border-radius: 2px;
   color: inherit;
-  background-color: color-mix(
-    in srgb,
-    var(--theme-tertiary) 55%,
-    transparent
-  );
+  background-color: color-mix(in srgb, var(--theme-tertiary) 55%, transparent);
 }
 
 mark.lnreader-search-match-active {
