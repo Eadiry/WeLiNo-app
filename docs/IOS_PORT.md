@@ -335,30 +335,45 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
 3. **Text pipeline** before `load()`: persistent character-name substitution,
    offline MTL cleanup, LanguageTool deep-clean, CJK auto-romanisation.
    Port from the Capacitor WeLiNo repo (`src/pipeline/`, `src/substitution/`).
-4. **On-device Kokoro TTS** _(decided; do after Milestone 1 is signed off)_.
-   Kokoro-82M (Apache-2.0, ~54 voices) as a second synthesis engine alongside
-   `AVSpeechSynthesizer`, running **fully on the phone** — no API key, no
-   network, no per-use cost. Pieces:
-   - **Delivery — a "voice repository", mirroring the plugin repositories.**
-     Reuse the existing repo infra (`repository` table,
-     `SettingsRepositoryScreen`, `AddRepositoryModal`, manifest-fetch →
-     download-item flow). User pastes a `voices.json` URL; the manifest lists
-     the Kokoro engine (one ~90 MB quantized ONNX, required, downloaded once)
-     plus individual voice embeddings (~0.5 MB each, split out of
-     `voices-v1.0.bin`). Downloaded items land in app storage and appear in
-     the reader voice picker. Host the manifest + files anywhere (GitHub raw /
-     CDN / HF); third parties can publish their own.
-   - **Inference**: `onnxruntime` for iOS (there's `onnxruntime-react-native`,
-     or a small Nitro/Expo native wrapper). Output is 24 kHz mono float PCM.
-   - **Phonemizer (the hard part)**: Kokoro takes phonemes, not text. Normally
-     espeak-ng (C) does G2P — needs cross-compiling for iOS, or a pure
-     JS/Swift G2P. Evaluate an espeak-ng iOS fork vs. a JS phonemizer.
-   - **Playback**: feed PCM to `AVAudioEngine`/`AVAudioPlayerNode`; synthesize
-     per-sentence chunks so playback can start fast and the paragraph queue +
-     lock-screen controls + background audio keep working. Slot into the same
-     coordinator as item 1.
-   - Reader TTS settings gain an engine picker (System vs Kokoro) + Kokoro
-     voice list.
+4. **On-device Kokoro TTS** — _scaffolded (commits after `8acc1917`); native
+   link/inference bring-up still needs a Mac / TestFlight pass._
+   Kokoro-82M as a second synthesis engine alongside `AVSpeechSynthesizer`,
+   fully on the phone. **iOS only**; Android stays on system TTS.
+
+   - **Inference stack: `k2-fsa/sherpa-onnx`** prebuilt iOS xcframework
+     (Apache-2.0) — bundles ONNX Runtime + espeak-ng phonemization + Kokoro,
+     outputs 24 kHz float PCM, so no hand-rolled phonemizer.
+     `scripts/fetch-sherpa-onnx.cjs` vendors `sherpa-onnx.xcframework` +
+     `onnxruntime.xcframework` into `modules/nitro-tts/ios/vendor/` (gitignored,
+     macOS/CI); `NitroTts.podspec` links them when present; `codemagic.yaml`
+     runs the fetch before `pod install` and caches the dir. Everything is
+     behind `#if canImport(CSherpaOnnx)` — a build without the framework
+     compiles Kokoro as a no-op and ships with it unavailable.
+   - **Native**: `KokoroSpeechEngine.swift` (sherpa-onnx `OfflineTts` →
+     `AVAudioPlayerNode`, per-sentence chunks). `TtsPlaybackCoordinator` got an
+     additive `usingKokoro` branch in `speakCurrent`/`play`/`pause`/
+     `interruptSpeech`; the `AVSpeechSynthesizer` path is unchanged; shared
+     `advanceAfterCurrentUtterance()` drives the queue for both. Nitro
+     `TtsSettings` gains `engineKind` + `kokoroModelDir`.
+   - **Delivery — voice repositories** (full multi-repo system): `VoiceRepository`
+     table + drizzle migration + `VoiceRepositoryQueries`;
+     `src/services/tts/voiceRepository.ts` (parse a `voices.json`
+     `sherpa-onnx-kokoro` manifest, `installEngine` downloads each file /
+     unzips `espeak-ng-data.zip` with progress, `isEngineInstalled` /
+     `uninstallEngine` / `listInstalledKokoroVoices`); `TTS_STORAGE` in
+     `Storages.ts`. `NativeZipArchive.unzip` now has a real iOS impl
+     (`ZipReader.swift`, dependency-free — also unblocks iOS backup restore).
+   - **UI**: `SettingsVoiceRepositoryScreen` (add/toggle/delete repos +
+     per-engine Download/Remove), linked from the main Settings list. `TTSTab`
+     gets an Engine row (System / Kokoro on-device, iOS, when a bundle is
+     installed) + a Kokoro voice picker. `ChapterReaderSettings.tts` gains
+     `engineKind` / `kokoroEngineId` / `kokoroVoiceId` / `kokoroSpeakerId`;
+     `WebViewReader.toNativeTtsSettings` maps them (`voiceIdentifier` =
+     `String(speakerId)`, `kokoroModelDir` = `engineDir(id)`).
+   - **Bring-up TODO (Mac):** confirm the `CSherpaOnnx` clang module wiring in
+     `NitroTts.podspec` / `fetch-sherpa-onnx.cjs`; pin a real sherpa-onnx
+     release tag; smoke-test one Kokoro voice speaking on a device (screen-off
+     continuation, Control Center, cross-chapter).
 
 ## Reference
 
