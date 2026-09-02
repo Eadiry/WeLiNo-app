@@ -9,6 +9,10 @@ import { useChapterReaderSettings, useTheme } from '@hooks/persisted';
 import { ChapterInfo, NovelInfo } from '@database/types';
 import { Tts, TtsVoice } from '@modules/nitro-tts';
 import { VoicePickerModal } from './ReaderBottomSheet/TTSTab';
+import {
+  listInstalledKokoroVoices,
+  type InstalledKokoroVoice,
+} from '@services/tts/voiceRepository';
 import type { useTtsSession } from '../hooks/useTtsSession';
 import { SLEEP_MODES, SleepMode, useSleepTimer } from '../hooks/useSleepTimer';
 
@@ -43,6 +47,8 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
   const [sleepSheet, setSleepSheet] = useState(false);
   const [voiceSheet, setVoiceSheet] = useState(false);
   const [voices, setVoices] = useState<TtsVoice[]>([]);
+  const [kokoroVoices, setKokoroVoices] = useState<InstalledKokoroVoice[]>([]);
+  const isKokoro = ttsSettings?.engineKind === 'kokoro';
 
   useSleepTimer({
     mode: sleepMode,
@@ -54,18 +60,40 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
   });
 
   useEffect(() => {
-    if (voiceSheet) {
+    if (!voiceSheet) {
+      return;
+    }
+    if (isKokoro) {
+      listInstalledKokoroVoices()
+        .then(setKokoroVoices)
+        .catch(() => setKokoroVoices([]));
+    } else {
       Tts.getVoices(ttsSettings?.engine?.name).then(res =>
         setVoices([...res].sort((a, b) => a.name.localeCompare(b.name))),
       );
     }
-  }, [voiceSheet, ttsSettings?.engine?.name]);
+  }, [voiceSheet, isKokoro, ttsSettings?.engine?.name]);
 
   const selectVoice = useCallback(
     (voice?: TtsVoice) => {
+      if (isKokoro) {
+        const picked = kokoroVoices.find(v => v.id === voice?.identifier);
+        if (picked) {
+          setChapterReaderSettings({
+            tts: {
+              ...ttsSettings,
+              engineKind: 'kokoro',
+              kokoroEngineId: picked.engineId,
+              kokoroVoiceId: picked.id,
+              kokoroSpeakerId: picked.speakerId,
+            },
+          });
+        }
+        return;
+      }
       setChapterReaderSettings({ tts: { ...ttsSettings, voice } });
     },
-    [setChapterReaderSettings, ttsSettings],
+    [isKokoro, kokoroVoices, setChapterReaderSettings, ttsSettings],
   );
 
   if (!visible) {
@@ -74,7 +102,26 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
 
   const playing = tts.state === 'playing';
   const chapterName = tts.currentChapterName || chapter.name;
-  const voice = ttsSettings?.voice;
+
+  // The voice picker (VoicePickerModal) speaks TtsVoice; map Kokoro voices into
+  // that shape so the same modal serves both engines.
+  const pickerVoices: TtsVoice[] = isKokoro
+    ? kokoroVoices.map(v => ({
+        identifier: v.id,
+        name: v.name,
+        language: v.language,
+      }))
+    : voices;
+  const voice: TtsVoice | undefined = isKokoro
+    ? ttsSettings?.kokoroVoiceId
+      ? {
+          identifier: ttsSettings.kokoroVoiceId,
+          name:
+            kokoroVoices.find(v => v.id === ttsSettings.kokoroVoiceId)?.name ??
+            ttsSettings.kokoroVoiceId,
+        }
+      : undefined
+    : ttsSettings?.voice;
 
   return (
     <Animated.View
@@ -145,6 +192,7 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
         <Text style={styles.caption}>
           {tts.currentText || (playing ? '…' : 'Paused')}
         </Text>
+        {tts.error ? <Text style={styles.errorText}>{tts.error}</Text> : null}
       </ScrollView>
 
       <View style={styles.transport}>
@@ -237,7 +285,7 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
       <VoicePickerModal
         visible={voiceSheet}
         onDismiss={() => setVoiceSheet(false)}
-        voices={voices}
+        voices={pickerVoices}
         currentVoice={voice}
         onSelect={selectVoice}
       />
@@ -342,6 +390,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 20,
       lineHeight: 30,
       marginTop: 20,
+      alignSelf: 'stretch',
+    },
+    errorText: {
+      color: theme.error,
+      fontSize: 13,
+      marginTop: 12,
       alignSelf: 'stretch',
     },
     transport: {

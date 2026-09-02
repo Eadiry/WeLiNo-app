@@ -343,12 +343,16 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
    - **Inference stack: `k2-fsa/sherpa-onnx`** prebuilt iOS xcframework
      (Apache-2.0) — bundles ONNX Runtime + espeak-ng phonemization + Kokoro,
      outputs 24 kHz float PCM, so no hand-rolled phonemizer.
-     `scripts/fetch-sherpa-onnx.cjs` vendors `sherpa-onnx.xcframework` +
-     `onnxruntime.xcframework` into `modules/nitro-tts/ios/vendor/` (gitignored,
-     macOS/CI); `NitroTts.podspec` links them when present; `codemagic.yaml`
-     runs the fetch before `pod install` and caches the dir. Everything is
-     behind `#if canImport(CSherpaOnnx)` — a build without the framework
-     compiles Kokoro as a no-op and ships with it unavailable.
+     `scripts/fetch-sherpa-onnx.cjs` downloads
+     `sherpa-onnx-v<VER>-ios-shared-onnxruntime-static.xcframework.zip` from the
+     `xcframework` release tag → one self-contained `SherpaOnnxC.xcframework`
+     (ONNX Runtime baked in, bundled clang module `SherpaOnnxC`) into
+     `modules/nitro-tts/ios/vendor/` (gitignored, macOS/CI); `NitroTts.podspec`
+     links it when present; `codemagic.yaml` runs the fetch before
+     `pod install` and caches the dir. Everything is behind
+     `#if canImport(SherpaOnnxC)` — a build without the framework compiles
+     Kokoro as a no-op and ships with it unavailable. Pinned
+     `SHERPA_ONNX_VERSION` default is `1.13.7`.
    - **Native**: `KokoroSpeechEngine.swift` (sherpa-onnx `OfflineTts` →
      `AVAudioPlayerNode`, per-sentence chunks). `TtsPlaybackCoordinator` got an
      additive `usingKokoro` branch in `speakCurrent`/`play`/`pause`/
@@ -370,10 +374,16 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
      `engineKind` / `kokoroEngineId` / `kokoroVoiceId` / `kokoroSpeakerId`;
      `WebViewReader.toNativeTtsSettings` maps them (`voiceIdentifier` =
      `String(speakerId)`, `kokoroModelDir` = `engineDir(id)`).
-   - **Bring-up TODO (Mac):** confirm the `CSherpaOnnx` clang module wiring in
-     `NitroTts.podspec` / `fetch-sherpa-onnx.cjs`; pin a real sherpa-onnx
-     release tag; smoke-test one Kokoro voice speaking on a device (screen-off
-     continuation, Control Center, cross-chapter).
+   - **Manifest**: `docs/kokoro/voices.json` (curated Kokoro v1.0 EN, 5 voices)
+     is hosted in-repo; raw URL
+     `https://raw.githubusercontent.com/Eadiry/WeLiNo-app/welino/docs/kokoro/voices.json`.
+     `bundleUrl` → a `kokoro-v1_0-en.zip` Release asset the user builds from
+     k2-fsa's `kokoro-multi-lang-v1_0.tar.bz2` (minus `dict/`).
+   - **Bring-up TODO (Mac):** confirm `import SherpaOnnxC` resolves through
+     `s.vendored_frameworks` (the xcframework carries its own modulemap, so it
+     should); check the shared-framework embeds/signs OK in the static Pods
+     setup; smoke-test one Kokoro voice on a device (screen-off, Control
+     Center, cross-chapter).
 
 ## Reference
 

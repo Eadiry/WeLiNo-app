@@ -2,8 +2,8 @@ import AVFAudio
 import Foundation
 import NitroModules
 
-#if canImport(CSherpaOnnx)
-  import CSherpaOnnx
+#if canImport(SherpaOnnxC)
+  import SherpaOnnxC
 #endif
 
 /// On-device Kokoro synthesis, used by `TtsPlaybackCoordinator` only when the
@@ -11,13 +11,11 @@ import NitroModules
 /// — the coordinator never touches this type on the system-`AVSpeechSynthesizer`
 /// path.
 ///
-/// Bring-up notes (needs a Mac / TestFlight build to finish):
-///  * `scripts/fetch-sherpa-onnx.cjs` vendors `sherpa-onnx.xcframework` +
-///    `onnxruntime.xcframework` into `modules/nitro-tts/ios/vendor/`, referenced
-///    by `NitroTts.podspec` (`vendored_frameworks`). The framework ships a
-///    clang module (`CSherpaOnnx`) exposing `c-api.h`.
-///  * If the module name or a struct field differs in the pinned sherpa-onnx
-///    release, only this file needs adjusting.
+/// `scripts/fetch-sherpa-onnx.cjs` vendors `SherpaOnnxC.xcframework` (the
+/// `ios-shared-onnxruntime-static` build, ONNX Runtime baked in, bundled clang
+/// module `SherpaOnnxC`) into `modules/nitro-tts/ios/vendor/`, linked by
+/// `NitroTts.podspec` via `vendored_frameworks`. When it's absent the whole
+/// file compiles as a no-op via `#if canImport(SherpaOnnxC)`.
 final class KokoroSpeechEngine {
   /// Natural-completion callback (last scheduled buffer finished rendering).
   var onFinish: (() -> Void)?
@@ -39,7 +37,7 @@ final class KokoroSpeechEngine {
 
   private(set) var isPaused = false
 
-  #if canImport(CSherpaOnnx)
+  #if canImport(SherpaOnnxC)
     private var tts: OpaquePointer?
   #endif
 
@@ -50,7 +48,7 @@ final class KokoroSpeechEngine {
   func prepare(modelDir: String) throws {
     guard loadedModelDir != modelDir else { return }
 
-    #if canImport(CSherpaOnnx)
+    #if canImport(SherpaOnnxC)
       let fm = FileManager.default
       let model = modelDir + "/model.onnx"
       let voices = modelDir + "/voices.bin"
@@ -133,7 +131,7 @@ final class KokoroSpeechEngine {
       guard let self else { return }
       for sentence in sentences {
         if gen != self.generation { return }
-        #if canImport(CSherpaOnnx)
+        #if canImport(SherpaOnnxC)
           guard let handle = self.tts else { return }
           guard
             let audio = SherpaOnnxOfflineTtsGenerate(
@@ -254,7 +252,7 @@ final class KokoroSpeechEngine {
   }
 
   private func destroyHandle() {
-    #if canImport(CSherpaOnnx)
+    #if canImport(SherpaOnnxC)
       if let handle = tts {
         SherpaOnnxDestroyOfflineTts(handle)
         tts = nil

@@ -15,11 +15,11 @@ Pod::Spec.new do |s|
   s.source_files   = ["ios/**/*.{swift}"]
   s.exclude_files  = ["ios/vendor/**/*"]
 
-  # On-device Kokoro engine (optional): the prebuilt sherpa-onnx + onnxruntime
-  # xcframeworks are fetched into ios/vendor/ by `scripts/fetch-sherpa-onnx.cjs`
-  # (gitignored, macOS/CI only). When absent, `KokoroSpeechEngine.swift`
-  # compiles as a no-op via `#if canImport(CSherpaOnnx)` and the app ships with
-  # Kokoro unavailable — nothing else is affected.
+  # On-device Kokoro engine (optional): the prebuilt SherpaOnnxC.xcframework
+  # (ONNX Runtime baked in) is fetched into ios/vendor/ by
+  # `scripts/fetch-sherpa-onnx.cjs` (gitignored, macOS/CI only). When absent,
+  # `KokoroSpeechEngine.swift` compiles as a no-op via
+  # `#if canImport(SherpaOnnxC)` and the app ships with Kokoro unavailable.
   vendor_dir = File.join(__dir__, "ios", "vendor")
   kokoro_frameworks =
     Dir.exist?(vendor_dir) ? Dir.glob(File.join(vendor_dir, "*.xcframework")) : []
