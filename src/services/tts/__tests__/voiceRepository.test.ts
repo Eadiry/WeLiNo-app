@@ -15,6 +15,8 @@ jest.mock('@modules/native-file', () => ({
     exists: jest.fn(),
     mkdir: jest.fn(async () => undefined),
     unlink: jest.fn(async () => undefined),
+    readDir: jest.fn(async () => []),
+    moveFile: jest.fn(async () => undefined),
   },
 }));
 
@@ -35,6 +37,8 @@ const NativeFile = require('@modules/native-file').default as {
   exists: jest.Mock;
   mkdir: jest.Mock;
   unlink: jest.Mock;
+  readDir: jest.Mock;
+  moveFile: jest.Mock;
 };
 const NativeZipArchive = require('@modules/native-zip-archive').default as {
   unzip: jest.Mock;
@@ -139,6 +143,31 @@ describe('installEngine', () => {
       '/doc/TTS/kokoro-v1/espeak-ng-data.zip',
     );
     expect(progress[progress.length - 1]).toBeCloseTo(1);
+  });
+
+  it('downloads and unzips a single bundleUrl', async () => {
+    const bundled: VoiceManifestEngine = {
+      id: 'kokoro-en-v0_19',
+      name: 'Kokoro EN',
+      format: 'sherpa-onnx-kokoro',
+      bundleUrl: 'https://cdn.example.com/kokoro-en-v0_19.zip',
+      bundleBytes: 340,
+    };
+    NativeFile.exists.mockResolvedValue(false);
+
+    await installEngine(bundled);
+
+    expect(downloadFile).toHaveBeenCalledWith(
+      'https://cdn.example.com/kokoro-en-v0_19.zip',
+      '/doc/TTS/kokoro-en-v0_19/bundle.zip',
+    );
+    expect(NativeZipArchive.unzip).toHaveBeenCalledWith(
+      '/doc/TTS/kokoro-en-v0_19/bundle.zip',
+      '/doc/TTS/kokoro-en-v0_19',
+    );
+    expect(NativeFile.unlink).toHaveBeenCalledWith(
+      '/doc/TTS/kokoro-en-v0_19/bundle.zip',
+    );
   });
 
   it('skips files that already exist', async () => {

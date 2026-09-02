@@ -9,29 +9,28 @@ import { TTS_STORAGE } from '@utils/Storages';
  * the manifest describes a synthesis **engine bundle** (a Kokoro model + its
  * data files) plus the **voices** it offers.
  *
- * A `voices.json` manifest:
+ * A `voices.json` manifest — the engine is either **one zip** of the model
+ * folder (simplest to host) or a **per-file** list:
  *
  * ```json
  * {
  *   "engine": {
- *     "id": "kokoro-multi-lang-v1_0",
- *     "name": "Kokoro 82M",
+ *     "id": "kokoro-en-v0_19",
+ *     "name": "Kokoro 82M (English)",
  *     "format": "sherpa-onnx-kokoro",
- *     "files": [
- *       { "path": "model.onnx",         "url": "https://…/model.onnx",         "bytes": 90000000 },
- *       { "path": "tokens.txt",         "url": "https://…/tokens.txt",         "bytes": 5000 },
- *       { "path": "voices.bin",         "url": "https://…/voices.bin",         "bytes": 27000000 },
- *       { "path": "espeak-ng-data",     "url": "https://…/espeak-ng-data.zip", "bytes": 8000000, "unzip": true }
- *     ]
+ *     "bundleUrl": "https://…/kokoro-en-v0_19.zip",
+ *     "bundleBytes": 340000000
  *   },
  *   "voices": [
- *     { "id": "af_heart", "name": "Heart (US female)", "language": "en-US", "speakerId": 0 }
+ *     { "id": "af_sarah", "name": "Sarah (US female)", "language": "en-US", "speakerId": 3 }
  *   ]
  * }
  * ```
  *
- * `unzip` files are downloaded then extracted into the engine directory (the
- * archive is expected to contain a top-level folder matching `path`).
+ * The zip is extracted flat into the engine dir; a single wrapping folder
+ * (`kokoro-en-v0_19/model.onnx` …) is lifted up automatically. The per-file
+ * form instead lists `files: [{ path, url, bytes, unzip? }]` — flat filenames,
+ * `unzip:true` for a directory shipped as its own `.zip`.
  */
 
 export interface VoiceManifestFile {
@@ -48,7 +47,16 @@ export interface VoiceManifestEngine {
   name: string;
   /** Only `"sherpa-onnx-kokoro"` is understood today. */
   format: string;
-  files: VoiceManifestFile[];
+  /**
+   * A single `.zip` of the whole model folder (`model.onnx`, `tokens.txt`,
+   * `voices.bin`, `espeak-ng-data/` …), extracted flat into the engine dir.
+   * The simplest way to host a bundle — provide this OR `files`.
+   */
+  bundleUrl?: string;
+  /** Approximate download size of `bundleUrl`, for the progress bar. */
+  bundleBytes?: number;
+  /** Per-file layout — an alternative to `bundleUrl`. */
+  files?: VoiceManifestFile[];
 }
 
 export interface KokoroVoice {
@@ -94,10 +102,14 @@ export const parseVoiceManifest = (raw: unknown): VoiceManifest => {
   if (engine.format !== 'sherpa-onnx-kokoro') {
     throw new Error(`Unsupported engine format "${engine.format}".`);
   }
-  if (!Array.isArray(engine.files) || engine.files.length === 0) {
-    throw new Error('Manifest engine has no "files".');
+  const hasBundle =
+    typeof engine.bundleUrl === 'string' &&
+    /^https?:\/\//.test(engine.bundleUrl);
+  const hasFiles = Array.isArray(engine.files) && engine.files.length > 0;
+  if (!hasBundle && !hasFiles) {
+    throw new Error('Manifest engine needs a "bundleUrl" or a "files" list.');
   }
-  for (const file of engine.files) {
+  for (const file of engine.files ?? []) {
     if (!isFlatName(file?.path)) {
       throw new Error(
         `Manifest file "path" must be a plain name: ${file?.path}`,
@@ -148,9 +160,16 @@ export const fetchAllVoiceManifests = async (): Promise<
 
 export const engineDir = (engineId: string) => `${TTS_STORAGE}/${engineId}`;
 
-/** All the plain files an installed bundle must contain (unzip dirs excluded). */
-const requiredFilePaths = (engine: VoiceManifestEngine) =>
-  engine.files.map(file => `${engineDir(engine.id)}/${file.path}`);
+/** Files sherpa-onnx-kokoro always needs, regardless of how it was packaged. */
+const KOKORO_CORE_FILES = ['model.onnx', 'tokens.txt', 'voices.bin'];
+
+/** The plain files an installed engine dir must contain (unzip dirs excluded). */
+const requiredFilePaths = (engine: VoiceManifestEngine) => {
+  const names = engine.files?.length
+    ? engine.files.filter(file => !file.unzip).map(file => file.path)
+    : KOKORO_CORE_FILES;
+  return names.map(name => `${engineDir(engine.id)}/${name}`);
+};
 
 export const isEngineInstalled = async (
   engine: VoiceManifestEngine,
@@ -181,11 +200,26 @@ export const installEngine = async (
     await NativeFile.mkdir(dir);
   }
 
+  // Single-zip bundle: download it once and extract flat into the engine dir.
+  if (engine.bundleUrl) {
+    onProgress?.({ fraction: 0, currentFile: 'bundle.zip' });
+    const tmp = `${dir}/bundle.zip`;
+    if (!(await NativeFile.exists(`${dir}/model.onnx`))) {
+      await downloadFile(engine.bundleUrl, tmp);
+      await NativeZipArchive.unzip(tmp, dir);
+      await NativeFile.unlink(tmp);
+      await flattenWrapperDir(dir);
+    }
+    onProgress?.({ fraction: 1, currentFile: 'bundle.zip' });
+    return;
+  }
+
+  const files = engine.files ?? [];
   const totalBytes =
-    engine.files.reduce((sum, file) => sum + (file.bytes ?? 0), 0) || 1;
+    files.reduce((sum, file) => sum + (file.bytes ?? 0), 0) || 1;
   let doneBytes = 0;
 
-  for (const file of engine.files) {
+  for (const file of files) {
     const target = `${dir}/${file.path}`;
     onProgress?.({ fraction: doneBytes / totalBytes, currentFile: file.path });
 
@@ -203,6 +237,35 @@ export const installEngine = async (
     doneBytes += file.bytes ?? 0;
     onProgress?.({ fraction: doneBytes / totalBytes, currentFile: file.path });
   }
+};
+
+/**
+ * If a bundle zip wrapped everything in a single top-level folder
+ * (`kokoro-en-v0_19/model.onnx` …), lift that folder's contents up into `dir`
+ * so the rest of the code can assume `dir/model.onnx`.
+ */
+const flattenWrapperDir = async (dir: string): Promise<void> => {
+  if (await NativeFile.exists(`${dir}/model.onnx`)) {
+    return;
+  }
+  let entries: { name: string; isDirectory: boolean }[];
+  try {
+    entries = await NativeFile.readDir(dir);
+  } catch {
+    return;
+  }
+  const subDirs = entries.filter(e => e.isDirectory);
+  if (subDirs.length !== 1) {
+    return;
+  }
+  const inner = `${dir}/${subDirs[0].name}`;
+  if (!(await NativeFile.exists(`${inner}/model.onnx`))) {
+    return;
+  }
+  for (const entry of await NativeFile.readDir(inner)) {
+    await NativeFile.moveFile(`${inner}/${entry.name}`, `${dir}/${entry.name}`);
+  }
+  await NativeFile.unlink(inner);
 };
 
 export const uninstallEngine = async (engineId: string): Promise<void> => {
