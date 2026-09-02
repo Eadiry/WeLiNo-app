@@ -15,17 +15,28 @@ Pod::Spec.new do |s|
   s.source_files   = ["ios/**/*.{swift}"]
   s.exclude_files  = ["ios/vendor/**/*"]
 
-  # On-device Kokoro engine (optional): the prebuilt SherpaOnnxC.xcframework
-  # (ONNX Runtime baked in) is fetched into ios/vendor/ by
-  # `scripts/fetch-sherpa-onnx.cjs` (gitignored, macOS/CI only). When absent,
-  # `KokoroSpeechEngine.swift` compiles as a no-op via
+  # On-device Kokoro engine (optional): the prebuilt sherpa-onnx.xcframework
+  # (static, ONNX Runtime baked in — nothing to embed) is fetched into
+  # ios/vendor/ by `scripts/fetch-sherpa-onnx.cjs` (gitignored, macOS/CI only).
+  # When absent, `KokoroSpeechEngine.swift` compiles as a no-op via
   # `#if canImport(SherpaOnnxC)` and the app ships with Kokoro unavailable.
-  vendor_dir = File.join(__dir__, "ios", "vendor")
-  kokoro_frameworks =
-    Dir.exist?(vendor_dir) ? Dir.glob(File.join(vendor_dir, "*.xcframework")) : []
-  unless kokoro_frameworks.empty?
-    s.vendored_frameworks =
-      kokoro_frameworks.map { |f| "ios/vendor/#{File.basename(f)}" }
+  #
+  # `vendored_frameworks` alone did NOT make `import SherpaOnnxC` resolve in a
+  # static-linkage project, so the xcframework's slice dirs are put on
+  # FRAMEWORK_SEARCH_PATHS explicitly. Set here (before nitrogen), which
+  # merge-preserves it.
+  vendor_xcf = File.join(__dir__, "ios", "vendor", "sherpa-onnx.xcframework")
+  if File.exist?(File.join(vendor_xcf, "Info.plist"))
+    s.vendored_frameworks = "ios/vendor/sherpa-onnx.xcframework"
+    slice_paths =
+      Dir.glob(File.join(vendor_xcf, "ios-*"))
+        .select { |p| File.directory?(p) }
+        .sort # "ios-arm64" (device) before "ios-arm64_x86_64-simulator"
+        .map { |p| "\"$(PODS_TARGET_SRCROOT)/ios/vendor/sherpa-onnx.xcframework/#{File.basename(p)}\"" }
+        .join(" ")
+    s.pod_target_xcconfig = {
+      "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{slice_paths}",
+    }
   end
 
   load "nitrogen/generated/ios/NitroTts+autolinking.rb"

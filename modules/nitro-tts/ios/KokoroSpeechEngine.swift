@@ -17,11 +17,11 @@ struct KokoroError: LocalizedError {
 /// — the coordinator never touches this type on the system-`AVSpeechSynthesizer`
 /// path.
 ///
-/// `scripts/fetch-sherpa-onnx.cjs` vendors `SherpaOnnxC.xcframework` (the
-/// `ios-shared-onnxruntime-static` build, ONNX Runtime baked in, bundled clang
-/// module `SherpaOnnxC`) into `modules/nitro-tts/ios/vendor/`, linked by
-/// `NitroTts.podspec` via `vendored_frameworks`. When it's absent the whole
-/// file compiles as a no-op via `#if canImport(SherpaOnnxC)`.
+/// `scripts/fetch-sherpa-onnx.cjs` vendors `sherpa-onnx.xcframework` (the
+/// `ios-static` build — static archive, ONNX Runtime baked in, inner framework
+/// `SherpaOnnxC.framework` with a bundled clang module `SherpaOnnxC`) into
+/// `modules/nitro-tts/ios/vendor/`, linked by `NitroTts.podspec`. When it's
+/// absent the whole file compiles as a no-op via `#if canImport(SherpaOnnxC)`.
 final class KokoroSpeechEngine {
   /// Natural-completion callback (last scheduled buffer finished rendering).
   var onFinish: (() -> Void)?
