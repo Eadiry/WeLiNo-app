@@ -57,8 +57,10 @@ workflows:
         - $HOME/Library/pnpm/store
         # The pinned cocoapods/xcodeproj gems (small, stable).
         - $CM_BUILD_DIR/vendor/bundle
-        # Prebuilt sherpa-onnx + onnxruntime xcframeworks for the on-device
-        # Kokoro TTS engine — a few large, stable files: a good cache fit.
+        # Prebuilt sherpa-onnx xcframework (ONNX Runtime baked in) for the
+        # on-device Kokoro TTS engine — large + stable: a good cache fit. The
+        # fetch script re-downloads if the cached copy is from a different
+        # release asset, so a stale cache self-heals.
         - $CM_BUILD_DIR/modules/nitro-tts/ios/vendor
     triggering:
       events:

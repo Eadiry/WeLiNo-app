@@ -15,41 +15,21 @@ Pod::Spec.new do |s|
   s.source_files   = ["ios/**/*.{swift}"]
   s.exclude_files  = ["ios/vendor/**/*"]
 
-  # On-device Kokoro engine (optional): the prebuilt sherpa-onnx.xcframework
-  # (static, ONNX Runtime baked in — nothing to embed) is fetched into
-  # ios/vendor/ by `scripts/fetch-sherpa-onnx.cjs` (gitignored, macOS/CI only).
-  # When absent, `KokoroSpeechEngine.swift` compiles as a no-op via
-  # `#if canImport(SherpaOnnxC)` and the app ships with Kokoro unavailable.
+  # On-device Kokoro engine (optional): `scripts/fetch-sherpa-onnx.cjs`
+  # (gitignored, macOS/CI only) vendors the prebuilt sherpa-onnx
+  # `ios-shared-onnxruntime-static` xcframework here — a *dynamic*
+  # `sherpa-onnx.framework` with ONNX Runtime statically linked inside it, so
+  # there is nothing else to link. CocoaPods reads `vendored_frameworks` and
+  # wires the `-framework` flag, the search path, and (because it is dynamic)
+  # an embed + code-sign phase on its own — no manual xcconfig needed. The
+  # inner framework is `sherpa-onnx.framework`; its bundled modulemap names the
+  # Clang module `SherpaOnnxC`, which `KokoroSpeechEngine.swift` imports.
   #
-  # In this static-linkage project, `vendored_frameworks` alone got neither
-  # `import SherpaOnnxC` (compile) nor `-framework SherpaOnnxC` (app link)
-  # wired up, so both search path and link flag are set explicitly — on the
-  # pod for compilation, and on the *app* target (user_target_xcconfig) for the
-  # final link, which is where `_SherpaOnnx*` was coming up undefined.
-  vendor_xcf = File.join(__dir__, "ios", "vendor", "SherpaOnnxC.xcframework")
+  # When absent, that file compiles as a no-op via `#if canImport(SherpaOnnxC)`
+  # and the app ships with Kokoro unavailable.
+  vendor_xcf = File.join(__dir__, "ios", "vendor", "sherpa-onnx.xcframework")
   if File.exist?(File.join(vendor_xcf, "Info.plist"))
-    s.vendored_frameworks = "ios/vendor/SherpaOnnxC.xcframework"
-
-    slices =
-      Dir.glob(File.join(vendor_xcf, "ios-*"))
-        .select { |p| File.directory?(p) }
-        .map { |p| File.basename(p) }
-        .sort # "ios-arm64" (device) first
-
-    pod_paths = slices
-      .map { |b| "\"$(PODS_TARGET_SRCROOT)/ios/vendor/SherpaOnnxC.xcframework/#{b}\"" }
-      .join(" ")
-    app_paths = slices
-      .map { |b| "\"$(PODS_ROOT)/../../modules/nitro-tts/ios/vendor/SherpaOnnxC.xcframework/#{b}\"" }
-      .join(" ")
-
-    s.pod_target_xcconfig = {
-      "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{pod_paths}",
-    }
-    s.user_target_xcconfig = {
-      "FRAMEWORK_SEARCH_PATHS" => "$(inherited) #{app_paths}",
-      "OTHER_LDFLAGS" => "$(inherited) -framework SherpaOnnxC",
-    }
+    s.vendored_frameworks = "ios/vendor/sherpa-onnx.xcframework"
 
     # sherpa-onnx + the bundled ONNX Runtime pull in the C++ runtime and BLAS.
     s.libraries  = "c++"

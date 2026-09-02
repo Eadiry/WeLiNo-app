@@ -18,10 +18,11 @@ struct KokoroError: LocalizedError {
 /// path.
 ///
 /// `scripts/fetch-sherpa-onnx.cjs` vendors `sherpa-onnx.xcframework` (the
-/// `ios-static` build — static archive, ONNX Runtime baked in, inner framework
-/// `SherpaOnnxC.framework` with a bundled clang module `SherpaOnnxC`) into
-/// `modules/nitro-tts/ios/vendor/`, linked by `NitroTts.podspec`. When it's
-/// absent the whole file compiles as a no-op via `#if canImport(SherpaOnnxC)`.
+/// `ios-shared-onnxruntime-static` build — a dynamic `sherpa-onnx.framework`
+/// with ONNX Runtime statically linked inside it, bundled clang module
+/// `SherpaOnnxC`) into `modules/nitro-tts/ios/vendor/`, linked and embedded by
+/// `NitroTts.podspec`. When it's absent the whole file compiles as a no-op via
+/// `#if canImport(SherpaOnnxC)`.
 final class KokoroSpeechEngine {
   /// Natural-completion callback (last scheduled buffer finished rendering).
   var onFinish: (() -> Void)?

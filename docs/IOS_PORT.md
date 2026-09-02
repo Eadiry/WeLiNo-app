@@ -345,11 +345,13 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
      outputs 24 kHz float PCM, so no hand-rolled phonemizer.
      `scripts/fetch-sherpa-onnx.cjs` downloads
      `sherpa-onnx-v<VER>-ios-shared-onnxruntime-static.xcframework.zip` from the
-     `xcframework` release tag → one self-contained `SherpaOnnxC.xcframework`
-     (ONNX Runtime baked in, bundled clang module `SherpaOnnxC`) into
-     `modules/nitro-tts/ios/vendor/` (gitignored, macOS/CI); `NitroTts.podspec`
-     links it when present; `codemagic.yaml` runs the fetch before
-     `pod install` and caches the dir. Everything is behind
+     `xcframework` release tag → one self-contained _dynamic_
+     `sherpa-onnx.xcframework` (ONNX Runtime statically linked inside, bundled
+     clang module `SherpaOnnxC`) into `modules/nitro-tts/ios/vendor/`
+     (gitignored, macOS/CI); `NitroTts.podspec` lists it in
+     `vendored_frameworks`, so CocoaPods links, embeds, and signs it;
+     `codemagic.yaml` runs the fetch before `pod install` and caches the dir
+     (the script re-downloads if the cached copy is from a different asset). Everything is behind
      `#if canImport(SherpaOnnxC)` — a build without the framework compiles
      Kokoro as a no-op and ships with it unavailable. Pinned
      `SHERPA_ONNX_VERSION` default is `1.13.7`.

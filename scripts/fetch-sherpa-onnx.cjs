@@ -5,12 +5,19 @@
  * on-device Kokoro engine.
  *
  * k2-fsa publishes the iOS xcframeworks under a dedicated `xcframework`
- * release tag. We use the `ios-static` variant: sherpa-onnx built as a static
- * archive with ONNX Runtime linked in, wrapped in `sherpa-onnx.xcframework`
- * (inner framework `SherpaOnnxC.framework`, module `SherpaOnnxC`, bundled
- * modulemap + `c-api.h`). Static → nothing to embed/sign, no launch crash.
+ * release tag with three variants. We use `ios-shared-onnxruntime-static`:
+ * sherpa-onnx as a *dynamic* `sherpa-onnx.xcframework` with ONNX Runtime
+ * statically linked *inside* it — one self-contained framework, nothing else
+ * to link. (The `ios-static` variant does NOT bundle ONNX Runtime, so it left
+ * `_OrtGetApiBase` & friends undefined at Ld — build #31.) The inner framework
+ * is `sherpa-onnx.framework`; its bundled modulemap names the Clang module
+ * `SherpaOnnxC`, which is what `KokoroSpeechEngine.swift` imports.
  *
- * Why fetch instead of commit: ~17 MB zip and `expo prebuild` regenerates
+ * Being a dynamic framework it needs an embed + code-sign phase, which
+ * CocoaPods adds automatically for a `vendored_frameworks` entry — no manual
+ * xcconfig required.
+ *
+ * Why fetch instead of commit: large zip and `expo prebuild` regenerates
  * ios/ every build. Runs on macOS CI before `pod install` and locally before
  * `expo run:ios`. Output dir is gitignored.
  *
@@ -18,8 +25,8 @@
  * step is skipped the app still builds, with Kokoro unavailable.
  *
  * Override the pinned version with SHERPA_ONNX_VERSION=x.y.z (must have an
- * `-ios-static.xcframework.zip` asset on the `xcframework` release:
- * https://github.com/k2-fsa/sherpa-onnx/releases/tag/xcframework).
+ * `-ios-shared-onnxruntime-static.xcframework.zip` asset on the `xcframework`
+ * release: https://github.com/k2-fsa/sherpa-onnx/releases/tag/xcframework).
  */
 const { execSync } = require('child_process');
 const fs = require('fs');
@@ -35,29 +42,51 @@ const VENDOR_DIR = path.join(
   'ios',
   'vendor',
 );
-const ASSET = `sherpa-onnx-v${VERSION}-ios-static.xcframework.zip`;
+const ASSET = `sherpa-onnx-v${VERSION}-ios-shared-onnxruntime-static.xcframework.zip`;
 const URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/xcframework/${ASSET}`;
 /**
- * Stable name the podspec expects. MUST match the framework inside
- * (`SherpaOnnxC.framework`) so CocoaPods emits `-framework SherpaOnnxC` at
- * link time — the zip's own outer dir is `sherpa-onnx.xcframework`, which made
- * the linker miss it.
+ * Records which asset the current vendor/ contents came from. A cached vendor
+ * dir (Codemagic caches it) from a different asset — e.g. the old `ios-static`
+ * one — is wiped and re-fetched instead of being trusted.
  */
-const DEST_NAME = 'SherpaOnnxC.xcframework';
+const MARKER = path.join(VENDOR_DIR, '.vendored-asset');
 
 const log = msg => process.stdout.write(`[fetch-sherpa-onnx] ${msg}\n`);
 const run = (cmd, cwd) => execSync(cmd, { stdio: 'inherit', cwd });
+
+function existingXcframeworks() {
+  if (!fs.existsSync(VENDOR_DIR)) return [];
+  return fs
+    .readdirSync(VENDOR_DIR)
+    .filter(name => name.endsWith('.xcframework'))
+    .map(name => path.join(VENDOR_DIR, name));
+}
 
 function main() {
   if (process.platform !== 'darwin') {
     log(`skipped: iOS-only step, platform is ${process.platform}.`);
     return;
   }
-  const dest = path.join(VENDOR_DIR, DEST_NAME);
-  if (fs.existsSync(path.join(dest, 'Info.plist'))) {
-    log('framework already present — nothing to do.');
+
+  const current = existingXcframeworks();
+  const marked = fs.existsSync(MARKER)
+    ? fs.readFileSync(MARKER, 'utf8').trim()
+    : null;
+  if (
+    current.length === 1 &&
+    fs.existsSync(path.join(current[0], 'Info.plist')) &&
+    marked === ASSET
+  ) {
+    log(`already vendored from ${ASSET} — nothing to do.`);
     return;
   }
+
+  // Stale/mismatched cache (or a previous partial run): start clean.
+  for (const xcf of current) {
+    log(`removing stale ${path.basename(xcf)}`);
+    fs.rmSync(xcf, { recursive: true, force: true });
+  }
+  fs.rmSync(MARKER, { force: true });
 
   fs.mkdirSync(VENDOR_DIR, { recursive: true });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sherpa-onnx-'));
@@ -68,21 +97,25 @@ function main() {
   log('extracting');
   run(`unzip -q "${zip}" -d "${tmp}"`);
 
-  const xcf = fs
-    .readdirSync(tmp)
-    .find(name => name.endsWith('.xcframework'));
-  if (!xcf) {
+  // The zip may wrap the xcframework in a folder; find it at any depth.
+  const found = execSync(
+    `find "${tmp}" -maxdepth 3 -type d -name "*.xcframework"`,
+    { encoding: 'utf8' },
+  )
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);
+  if (found.length === 0) {
     throw new Error(`no *.xcframework found inside ${ASSET}.`);
   }
-  // Clear any older-named xcframework left in the cache from a previous layout.
-  for (const name of fs.readdirSync(VENDOR_DIR)) {
-    if (name.endsWith('.xcframework')) {
-      fs.rmSync(path.join(VENDOR_DIR, name), { recursive: true, force: true });
-    }
+
+  for (const src of found) {
+    const dest = path.join(VENDOR_DIR, path.basename(src));
+    run(`cp -R "${src}" "${dest}"`);
+    log(`vendored ${path.basename(src)}`);
   }
-  run(`cp -R "${path.join(tmp, xcf)}" "${dest}"`);
+  fs.writeFileSync(MARKER, `${ASSET}\n`);
   fs.rmSync(tmp, { recursive: true, force: true });
-  log(`vendored ${DEST_NAME}`);
 }
 
 try {
