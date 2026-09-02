@@ -4,7 +4,7 @@
     "name": "Kokoro 82M v1.0",
     "format": "sherpa-onnx-kokoro",
     "bundleUrl": "https://github.com/Eadiry/WeLiNo-app/releases/download/kokoro-v1_0-en/kokoro-v1_0-en.zip",
-    "bundleBytes": 120000000
+    "bundleBytes": 127258061
   },
   "voices": [
     {
@@ -20,22 +20,28 @@
       "speakerId": 2
     },
     {
+      "id": "af_nicole",
+      "name": "Nicole (US female)",
+      "language": "en-US",
+      "speakerId": 6
+    },
+    {
       "id": "bf_emma",
       "name": "Emma (UK female)",
       "language": "en-GB",
       "speakerId": 21
     },
     {
-      "id": "am_puck",
-      "name": "Puck (US male)",
-      "language": "en-US",
-      "speakerId": 18
-    },
-    {
       "id": "am_fenrir",
       "name": "Fenrir (US male)",
       "language": "en-US",
       "speakerId": 14
+    },
+    {
+      "id": "am_michael",
+      "name": "Michael (US male)",
+      "language": "en-US",
+      "speakerId": 16
     }
   ]
 }
