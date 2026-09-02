@@ -30,7 +30,9 @@ internal object TtsPlaybackStore {
     private var paragraphs: List<TtsParagraph> = emptyList()
     private var currentIndex = 0
     private var metadata: TtsMetadata? = null
-    private var settings = TtsSettings(null, null, 1.0, 1.0)
+    // engineKind / kokoroModelDir are iOS-only (on-device Kokoro); Android
+    // always uses the system TextToSpeech engine and ignores them.
+    private var settings = TtsSettings(null, null, 1.0, 1.0, null, null)
     private var state = TtsPlaybackState.IDLE
     private var generation = 0L
 

@@ -29,7 +29,13 @@ data class TtsSettings(
   val rate: Double,
   @DoNotStrip
   @Keep
-  val pitch: Double
+  val pitch: Double,
+  @DoNotStrip
+  @Keep
+  val engineKind: String?,
+  @DoNotStrip
+  @Keep
+  val kokoroModelDir: String?
 ) {
   /* primary constructor */
 
@@ -40,6 +46,8 @@ data class TtsSettings(
       && Objects.deepEquals(this.voiceIdentifier, other.voiceIdentifier)
       && Objects.deepEquals(this.rate, other.rate)
       && Objects.deepEquals(this.pitch, other.pitch)
+      && Objects.deepEquals(this.engineKind, other.engineKind)
+      && Objects.deepEquals(this.kokoroModelDir, other.kokoroModelDir)
   }
 
   override fun hashCode(): Int {
@@ -47,7 +55,9 @@ data class TtsSettings(
       engineName,
       voiceIdentifier,
       rate,
-      pitch
+      pitch,
+      engineKind,
+      kokoroModelDir
     ).contentDeepHashCode()
   }
 
@@ -59,8 +69,8 @@ data class TtsSettings(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(engineName: String?, voiceIdentifier: String?, rate: Double, pitch: Double): TtsSettings {
-      return TtsSettings(engineName, voiceIdentifier, rate, pitch)
+    private fun fromCpp(engineName: String?, voiceIdentifier: String?, rate: Double, pitch: Double, engineKind: String?, kokoroModelDir: String?): TtsSettings {
+      return TtsSettings(engineName, voiceIdentifier, rate, pitch, engineKind, kokoroModelDir)
     }
   }
 }

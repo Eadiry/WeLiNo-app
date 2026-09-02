@@ -18,7 +18,7 @@ public extension TtsSettings {
   /**
    * Create a new instance of `TtsSettings`.
    */
-  init(engineName: String?, voiceIdentifier: String?, rate: Double, pitch: Double) {
+  init(engineName: String?, voiceIdentifier: String?, rate: Double, pitch: Double, engineKind: String?, kokoroModelDir: String?) {
     self.init({ () -> bridge.std__optional_std__string_ in
       if let __unwrappedValue = engineName {
         return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
@@ -31,7 +31,19 @@ public extension TtsSettings {
       } else {
         return .init()
       }
-    }(), rate, pitch)
+    }(), rate, pitch, { () -> bridge.std__optional_std__string_ in
+      if let __unwrappedValue = engineKind {
+        return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
+      } else {
+        return .init()
+      }
+    }(), { () -> bridge.std__optional_std__string_ in
+      if let __unwrappedValue = kokoroModelDir {
+        return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
+      } else {
+        return .init()
+      }
+    }())
   }
 
   @inline(__always)
@@ -66,5 +78,29 @@ public extension TtsSettings {
   @inline(__always)
   var pitch: Double {
     return self.__pitch
+  }
+  
+  @inline(__always)
+  var engineKind: String? {
+    return { () -> String? in
+      if bridge.has_value_std__optional_std__string_(self.__engineKind) {
+        let __unwrapped = bridge.get_std__optional_std__string_(self.__engineKind)
+        return String(__unwrapped)
+      } else {
+        return nil
+      }
+    }()
+  }
+  
+  @inline(__always)
+  var kokoroModelDir: String? {
+    return { () -> String? in
+      if bridge.has_value_std__optional_std__string_(self.__kokoroModelDir) {
+        let __unwrapped = bridge.get_std__optional_std__string_(self.__kokoroModelDir)
+        return String(__unwrapped)
+      } else {
+        return nil
+      }
+    }()
   }
 }

@@ -116,3 +116,7 @@ release-artifacts/
 !plugins/android/
 ios/
 !modules/**/ios/
+
+# Prebuilt sherpa-onnx / onnxruntime xcframeworks for the on-device Kokoro TTS
+# engine — fetched by scripts/fetch-sherpa-onnx.cjs (~100 MB, macOS/CI only).
+modules/*/ios/vendor/

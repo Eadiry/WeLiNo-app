@@ -28,6 +28,26 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
   /// once the interruption ends — otherwise narration just dies mid-session.
   private var resumeAfterInterruption = false
 
+  /// On-device Kokoro backend. Created lazily the first time the reader selects
+  /// `engineKind == "kokoro"` — the system `AVSpeechSynthesizer` path never
+  /// instantiates it (so no idle `AVAudioEngine`).
+  private var kokoroEngine: KokoroSpeechEngine?
+
+  /// Which backend the current `settings` selects.
+  private var usingKokoro: Bool { settings.engineKind == "kokoro" }
+
+  private func kokoro() -> KokoroSpeechEngine {
+    if let engine = kokoroEngine { return engine }
+    let engine = KokoroSpeechEngine()
+    engine.onFinish = { [weak self] in
+      guard let self, self.usingKokoro else { return }
+      self.advanceAfterCurrentUtterance()
+    }
+    engine.onError = { [weak self] in self?.fail($0) }
+    kokoroEngine = engine
+    return engine
+  }
+
   private lazy var remoteCommands = TtsRemoteCommandController(
     onPlay: { [weak self] in self?.play() },
     onPause: { [weak self] in self?.pause() },
@@ -69,7 +89,11 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     case .began:
       resumeAfterInterruption = (state == .playing)
       if state == .playing {
-        synthesizer.stopSpeaking(at: .immediate)
+        if usingKokoro {
+          kokoroEngine?.pause()
+        } else {
+          synthesizer.stopSpeaking(at: .immediate)
+        }
         state = .paused
         emitState()
       }
@@ -166,6 +190,16 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
       fail("Load a paragraph queue before starting TTS.")
       return
     }
+    if usingKokoro {
+      if kokoro().isPaused {
+        kokoro().resume()
+        state = .playing
+        emitState()
+        return
+      }
+      speakCurrent()
+      return
+    }
     if synthesizer.isPaused {
       synthesizer.continueSpeaking()
       state = .playing
@@ -178,7 +212,11 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
   func pause() {
     precondition(Thread.isMainThread)
     guard state == .playing else { return }
-    synthesizer.pauseSpeaking(at: .immediate)
+    if usingKokoro {
+      kokoro().pause()
+    } else {
+      synthesizer.pauseSpeaking(at: .immediate)
+    }
     state = .paused
     emitState()
   }
@@ -268,6 +306,14 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
   ) {
     guard utterance === activeUtterance else { return }
     activeUtterance = nil
+    advanceAfterCurrentUtterance()
+  }
+
+  /// Shared "the current paragraph finished speaking" handler for both the
+  /// `AVSpeechSynthesizer` delegate and the Kokoro engine's finish callback.
+  private func advanceAfterCurrentUtterance() {
+    precondition(Thread.isMainThread)
+    guard state == .playing else { return }
     if currentIndex >= paragraphs.count - 1 {
       completeQueue()
     } else {
@@ -307,6 +353,18 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
         coverUri: current.coverUri
       )
     }
+
+    // On-device Kokoro path — synthesises to an AVAudioEngine instead of
+    // AVSpeechSynthesizer. Queue advancement, now-playing, remote commands and
+    // interruption handling are all shared with the system path below.
+    if usingKokoro {
+      kokoro().speak(text: paragraph.text, settings: settings)
+      state = .playing
+      emitProgress()
+      emitState()
+      return
+    }
+
     let utterance = AVSpeechUtterance(string: paragraph.text)
     utterance.rate = (
       Float(settings.rate) * AVSpeechUtteranceDefaultSpeechRate
@@ -328,6 +386,7 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     if synthesizer.isSpeaking || synthesizer.isPaused {
       synthesizer.stopSpeaking(at: .immediate)
     }
+    kokoroEngine?.stop()
     activeUtterance = nil
   }
 

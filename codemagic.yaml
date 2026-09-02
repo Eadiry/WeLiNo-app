@@ -57,6 +57,9 @@ workflows:
         - $HOME/Library/pnpm/store
         # The pinned cocoapods/xcodeproj gems (small, stable).
         - $CM_BUILD_DIR/vendor/bundle
+        # Prebuilt sherpa-onnx + onnxruntime xcframeworks for the on-device
+        # Kokoro TTS engine — a few large, stable files: a good cache fit.
+        - $CM_BUILD_DIR/modules/nitro-tts/ios/vendor
     triggering:
       events:
         - push
@@ -90,6 +93,14 @@ workflows:
           # runtime — Android-only. Regenerate the inlined TS module so the
           # reader works on iOS (committed too; this keeps it in sync).
           pnpm generate:reader-assets
+
+      - name: Vendor sherpa-onnx (on-device Kokoro TTS)
+        script: |
+          # Downloads the prebuilt sherpa-onnx + onnxruntime xcframeworks into
+          # modules/nitro-tts/ios/vendor/ (cached). If it fails, the build still
+          # succeeds — KokoroSpeechEngine.swift compiles as a no-op and the app
+          # ships with Kokoro unavailable.
+          node scripts/fetch-sherpa-onnx.cjs || true
 
       - name: Prepare ccache
         script: |

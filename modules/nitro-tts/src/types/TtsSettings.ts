@@ -15,4 +15,18 @@ export interface TtsSettings {
   rate: number;
   /** Voice-pitch multiplier selected by the reader. */
   pitch: number;
+  /**
+   * iOS: which synthesis backend to drive each paragraph.
+   * `"system"` (or absent) → `AVSpeechSynthesizer`; `"kokoro"` → the on-device
+   * Kokoro engine, which also needs {@linkcode TtsSettings.kokoroModelDir}.
+   * Ignored on Android (always the system engine).
+   */
+  engineKind?: string;
+  /**
+   * iOS + `engineKind === "kokoro"`: absolute path to the directory holding the
+   * downloaded Kokoro model bundle (`model.onnx`, `tokens.txt`, `voices.bin`,
+   * `espeak-ng-data/`). When `engineKind` is `"kokoro"`,
+   * {@linkcode TtsSettings.voiceIdentifier} carries the Kokoro voice id.
+   */
+  kokoroModelDir?: string;
 }
