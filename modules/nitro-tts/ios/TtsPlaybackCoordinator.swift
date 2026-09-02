@@ -33,8 +33,18 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
     onPause: { [weak self] in self?.pause() },
     onStop: { [weak self] in self?.stop() },
     onPrevious: { [weak self] in self?.skipPrevious() },
-    onNext: { [weak self] in self?.skipNext() }
+    onNext: { [weak self] in self?.skipNext() },
+    onTogglePlayPause: { [weak self] in self?.togglePlayPause() }
   )
+
+  func togglePlayPause() {
+    precondition(Thread.isMainThread)
+    if state == .playing {
+      pause()
+    } else {
+      play()
+    }
+  }
 
   override private init() {
     super.init()
@@ -73,9 +83,15 @@ final class TtsPlaybackCoordinator: NSObject, AVSpeechSynthesizerDelegate {
       } else {
         shouldResume = false
       }
-      guard shouldResume else { return }
+      // Resume when the system says we may, or when the interruption was brief
+      // (a notification ping) and nothing else grabbed the audio — a reader is
+      // expected to keep talking, like Apple Books / Audible.
+      guard shouldResume || !AVAudioSession.sharedInstance().isOtherAudioPlaying
+      else { return }
       DispatchQueue.main.async { [weak self] in
-        guard let self, !self.paragraphs.isEmpty else { return }
+        guard let self, !self.paragraphs.isEmpty, self.state == .paused else {
+          return
+        }
         self.speakCurrent()
       }
     @unknown default:

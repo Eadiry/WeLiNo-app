@@ -1,16 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 
-import { Dialog } from '@components';
 import { useChapterReaderSettings, useTheme } from '@hooks/persisted';
 import { ChapterInfo, NovelInfo } from '@database/types';
+import { Tts, TtsVoice } from '@modules/nitro-tts';
+import { VoicePickerModal } from './ReaderBottomSheet/TTSTab';
 import type { useTtsSession } from '../hooks/useTtsSession';
 import { SLEEP_MODES, SleepMode, useSleepTimer } from '../hooks/useSleepTimer';
-
-const RATE_STEPS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
 interface ReaderPlayerScreenProps {
   visible: boolean;
@@ -18,6 +18,8 @@ interface ReaderPlayerScreenProps {
   onClose: () => void;
   /** Open the full reader TTS settings sheet. */
   onOpenSettings: () => void;
+  /** Open the chapter list. */
+  onOpenContents: () => void;
   tts: ReturnType<typeof useTtsSession>;
   novel: NovelInfo;
   chapter: ChapterInfo;
@@ -27,6 +29,7 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
   visible,
   onClose,
   onOpenSettings,
+  onOpenContents,
   tts,
   novel,
   chapter,
@@ -38,6 +41,8 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
     useChapterReaderSettings();
   const [sleepMode, setSleepMode] = useState<SleepMode>('off');
   const [sleepSheet, setSleepSheet] = useState(false);
+  const [voiceSheet, setVoiceSheet] = useState(false);
+  const [voices, setVoices] = useState<TtsVoice[]>([]);
 
   useSleepTimer({
     mode: sleepMode,
@@ -48,23 +53,28 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
     },
   });
 
+  useEffect(() => {
+    if (voiceSheet) {
+      Tts.getVoices(ttsSettings?.engine?.name).then(res =>
+        setVoices([...res].sort((a, b) => a.name.localeCompare(b.name))),
+      );
+    }
+  }, [voiceSheet, ttsSettings?.engine?.name]);
+
+  const selectVoice = useCallback(
+    (voice?: TtsVoice) => {
+      setChapterReaderSettings({ tts: { ...ttsSettings, voice } });
+    },
+    [setChapterReaderSettings, ttsSettings],
+  );
+
   if (!visible) {
     return null;
   }
 
   const playing = tts.state === 'playing';
-  const rate = ttsSettings?.rate ?? 1;
   const chapterName = tts.currentChapterName || chapter.name;
-
-  const cycleRate = () => {
-    const i = RATE_STEPS.findIndex(r => Math.abs(r - rate) < 0.01);
-    const next = RATE_STEPS[(i + 1) % RATE_STEPS.length];
-    // The WebView's MMKV listener forwards this to the native session.
-    setChapterReaderSettings({ tts: { ...ttsSettings, rate: next } });
-  };
-
-  const sleepLabel =
-    SLEEP_MODES.find(m => m.value === sleepMode)?.label ?? 'Off';
+  const voice = ttsSettings?.voice;
 
   return (
     <Animated.View
@@ -72,39 +82,66 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
       exiting={SlideOutDown.duration(200)}
       style={[
         styles.overlay,
-        { paddingTop: insets.top + 8, paddingBottom: insets.bottom },
+        { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 },
       ]}
     >
-      <View style={styles.header}>
+      <View style={styles.topRow}>
+        <Pressable
+          hitSlop={12}
+          onPress={onClose}
+          accessibilityLabel="Back to reader"
+        >
+          <MaterialCommunityIcons
+            name="chevron-down"
+            size={30}
+            color={theme.onSurface}
+          />
+        </Pressable>
+        <Pressable
+          style={styles.timerBtn}
+          onPress={() => setSleepSheet(true)}
+          accessibilityLabel="Sleep timer"
+        >
+          <MaterialCommunityIcons
+            name="timer-outline"
+            size={18}
+            color={sleepMode === 'off' ? theme.onSurfaceVariant : theme.primary}
+          />
+          {sleepMode !== 'off' ? (
+            <Text style={styles.timerText}>
+              {SLEEP_MODES.find(m => m.value === sleepMode)?.label}
+            </Text>
+          ) : null}
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+      >
+        {novel.cover ? (
+          <Image
+            source={{ uri: novel.cover }}
+            style={styles.cover}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.cover, styles.coverFallback]}>
+            <MaterialCommunityIcons
+              name="headphones"
+              size={64}
+              color={theme.onSurfaceVariant}
+            />
+          </View>
+        )}
+
         <Text style={styles.chapter} numberOfLines={2}>
           {chapterName}
         </Text>
         <Text style={styles.novel} numberOfLines={1}>
           {novel.name}
         </Text>
-      </View>
 
-      <View style={styles.chips}>
-        <Pressable style={styles.chip} onPress={cycleRate}>
-          <Text style={styles.chipText}>{rate.toFixed(rate % 1 ? 2 : 1)}×</Text>
-        </Pressable>
-        <Pressable style={styles.chip} onPress={() => setSleepSheet(true)}>
-          <MaterialCommunityIcons
-            name="timer-outline"
-            size={16}
-            color={theme.onSurfaceVariant}
-          />
-          <Text style={styles.chipText}>
-            {sleepMode === 'off' ? 'Timer' : sleepLabel}
-          </Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        style={styles.captionScroll}
-        contentContainerStyle={styles.captionContent}
-        showsVerticalScrollIndicator={false}
-      >
         <Text style={styles.caption}>
           {tts.currentText || (playing ? '…' : 'Paused')}
         </Text>
@@ -112,70 +149,106 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
 
       <View style={styles.transport}>
         <Pressable
-          style={styles.skip}
+          style={styles.endBtn}
+          onPress={onOpenContents}
+          accessibilityLabel="Chapter list"
+        >
+          <MaterialCommunityIcons
+            name="format-list-bulleted"
+            size={24}
+            color={theme.onSurface}
+          />
+          <Text style={styles.endLabel}>Contents</Text>
+        </Pressable>
+        <Pressable
+          hitSlop={8}
           onPress={() => tts.command('previous')}
           accessibilityLabel="Previous paragraph"
         >
           <MaterialCommunityIcons
             name="skip-previous"
-            size={44}
+            size={40}
             color={theme.onSurface}
           />
         </Pressable>
         <Pressable
-          style={styles.playPause}
+          style={styles.play}
           onPress={() => tts.command(playing ? 'pause' : 'play')}
           accessibilityLabel={playing ? 'Pause' : 'Play'}
         >
           <MaterialCommunityIcons
             name={playing ? 'pause' : 'play'}
-            size={44}
-            color={theme.onSurface}
+            size={40}
+            color={theme.surface}
           />
         </Pressable>
         <Pressable
-          style={styles.skip}
+          hitSlop={8}
           onPress={() => tts.command('next')}
           accessibilityLabel="Next paragraph"
         >
           <MaterialCommunityIcons
             name="skip-next"
-            size={44}
+            size={40}
             color={theme.onSurface}
           />
         </Pressable>
-      </View>
-
-      <View style={styles.bottomBar}>
-        <Pressable style={styles.bottomAction} onPress={onClose}>
-          <MaterialCommunityIcons
-            name="book-open-variant"
-            size={20}
-            color={theme.onSurface}
-          />
-          <Text style={styles.bottomLabel}>Reader</Text>
-        </Pressable>
-        <View style={styles.bottomDivider} />
         <Pressable
-          style={styles.bottomAction}
+          style={styles.endBtn}
           onPress={() => {
             onClose();
             onOpenSettings();
           }}
+          accessibilityLabel="Settings"
         >
           <MaterialCommunityIcons
             name="cog-outline"
-            size={20}
+            size={24}
             color={theme.onSurface}
           />
-          <Text style={styles.bottomLabel}>Settings</Text>
+          <Text style={styles.endLabel}>Settings</Text>
         </Pressable>
       </View>
 
-      <Dialog.Root visible={sleepSheet} onDismiss={() => setSleepSheet(false)}>
-        <Dialog.Title>Sleep timer</Dialog.Title>
-        <Dialog.ScrollArea>
-          <ScrollView>
+      <Pressable style={styles.voiceRow} onPress={() => setVoiceSheet(true)}>
+        <Text style={styles.voiceLabel}>Voice</Text>
+        <View style={styles.voiceRight}>
+          <MaterialCommunityIcons
+            name="account-circle"
+            size={28}
+            color={theme.onSurfaceVariant}
+          />
+          <View style={styles.voiceMeta}>
+            <Text style={styles.voiceName} numberOfLines={1}>
+              {voice?.name ?? 'System default'}
+            </Text>
+            {voice?.language ? (
+              <Text style={styles.voiceLang}>{voice.language}</Text>
+            ) : null}
+          </View>
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={24}
+            color={theme.onSurfaceVariant}
+          />
+        </View>
+      </Pressable>
+
+      <VoicePickerModal
+        visible={voiceSheet}
+        onDismiss={() => setVoiceSheet(false)}
+        voices={voices}
+        currentVoice={voice}
+        onSelect={selectVoice}
+      />
+
+      {sleepSheet ? (
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setSleepSheet(false)}
+        >
+          <Pressable style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Sleep timer</Text>
             {SLEEP_MODES.map(m => (
               <Pressable
                 key={m.value}
@@ -187,20 +260,17 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
               >
                 <Text style={styles.sleepRowText}>{m.label}</Text>
                 {sleepMode === m.value ? (
-                  <Text style={[styles.sleepRowText, { color: theme.primary }]}>
-                    ✓
-                  </Text>
+                  <MaterialCommunityIcons
+                    name="check"
+                    size={20}
+                    color={theme.primary}
+                  />
                 ) : null}
               </Pressable>
             ))}
-          </ScrollView>
-        </Dialog.ScrollArea>
-        <Dialog.Actions>
-          <Dialog.Action onPress={() => setSleepSheet(false)}>
-            Close
-          </Dialog.Action>
-        </Dialog.Actions>
-      </Dialog.Root>
+          </Pressable>
+        </Pressable>
+      ) : null}
     </Animated.View>
   );
 };
@@ -217,98 +287,146 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       zIndex: 6,
       paddingHorizontal: 20,
     },
-    header: {
-      alignItems: 'center',
-      paddingVertical: 12,
-    },
-    chapter: {
-      color: theme.onSurface,
-      fontSize: 18,
-      fontWeight: '700',
-      textAlign: 'center',
-      lineHeight: 24,
-    },
-    novel: {
-      color: theme.onSurfaceVariant,
-      fontSize: 14,
-      marginTop: 4,
-    },
-    chips: {
+    topRow: {
       flexDirection: 'row',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      marginTop: 4,
+      minHeight: 36,
     },
-    chip: {
+    timerBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 16,
-      backgroundColor: theme.surfaceVariant,
+      borderWidth: 1,
+      borderColor: theme.outline,
     },
-    chipText: {
-      color: theme.onSurfaceVariant,
-      fontSize: 13,
+    timerText: {
+      color: theme.primary,
+      fontSize: 12,
       fontWeight: '600',
     },
-    captionScroll: {
-      flex: 1,
-      marginTop: 12,
-    },
-    captionContent: {
+    body: {
+      alignItems: 'center',
+      paddingTop: 16,
+      paddingBottom: 8,
       flexGrow: 1,
+    },
+    cover: {
+      width: 220,
+      height: 300,
+      borderRadius: 16,
+      backgroundColor: theme.surfaceVariant,
+    },
+    coverFallback: {
+      alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 24,
+    },
+    chapter: {
+      color: theme.onSurface,
+      fontSize: 26,
+      fontWeight: '800',
+      textAlign: 'center',
+      marginTop: 24,
+    },
+    novel: {
+      color: theme.onSurfaceVariant,
+      fontSize: 15,
+      textAlign: 'center',
+      marginTop: 6,
     },
     caption: {
       color: theme.onSurface,
-      fontSize: 22,
-      lineHeight: 34,
+      fontSize: 20,
+      lineHeight: 30,
+      marginTop: 20,
+      alignSelf: 'stretch',
     },
     transport: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      gap: 28,
-      paddingVertical: 16,
+      justifyContent: 'space-between',
+      paddingVertical: 14,
     },
-    skip: {
-      padding: 8,
-    },
-    playPause: {
-      padding: 8,
-      borderRadius: 44,
-      borderWidth: 2,
-      borderColor: theme.outline,
-    },
-    bottomBar: {
-      flexDirection: 'row',
+    endBtn: {
       alignItems: 'center',
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: theme.outlineVariant,
-      paddingTop: 10,
+      gap: 2,
+      width: 68,
     },
-    bottomAction: {
-      flex: 1,
-      flexDirection: 'row',
+    endLabel: {
+      color: theme.onSurfaceVariant,
+      fontSize: 12,
+    },
+    play: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: theme.onSurface,
+    },
+    voiceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: theme.surfaceVariant,
+      borderRadius: 18,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+    },
+    voiceLabel: {
+      color: theme.onSurface,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    voiceRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 8,
-      paddingVertical: 8,
+      flexShrink: 1,
     },
-    bottomLabel: {
+    voiceMeta: {
+      alignItems: 'flex-end',
+      flexShrink: 1,
+    },
+    voiceName: {
       color: theme.onSurface,
       fontSize: 15,
+      fontWeight: '600',
     },
-    bottomDivider: {
-      width: StyleSheet.hairlineWidth,
-      alignSelf: 'stretch',
-      backgroundColor: theme.outlineVariant,
+    voiceLang: {
+      color: theme.onSurfaceVariant,
+      fontSize: 12,
+    },
+    sheetBackdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: theme.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 16,
+      paddingBottom: 32,
+    },
+    sheetTitle: {
+      color: theme.onSurface,
+      fontSize: 18,
+      fontWeight: '700',
+      marginBottom: 8,
+      paddingHorizontal: 4,
     },
     sleepRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
+      alignItems: 'center',
       paddingVertical: 14,
       paddingHorizontal: 4,
     },

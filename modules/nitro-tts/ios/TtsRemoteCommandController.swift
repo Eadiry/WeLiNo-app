@@ -9,10 +9,13 @@ final class TtsRemoteCommandController {
     onPause: @escaping () -> Void,
     onStop: @escaping () -> Void,
     onPrevious: @escaping () -> Void,
-    onNext: @escaping () -> Void
+    onNext: @escaping () -> Void,
+    onTogglePlayPause: @escaping () -> Void
   ) {
     register(commandCenter.playCommand, action: onPlay)
     register(commandCenter.pauseCommand, action: onPause)
+    // The single Control Center / headphone button sends this, not play/pause.
+    register(commandCenter.togglePlayPauseCommand, action: onTogglePlayPause)
     register(commandCenter.stopCommand, action: onStop)
     register(commandCenter.previousTrackCommand, action: onPrevious)
     register(commandCenter.nextTrackCommand, action: onNext)

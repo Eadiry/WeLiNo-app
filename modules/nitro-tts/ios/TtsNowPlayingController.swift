@@ -22,10 +22,24 @@ final class TtsNowPlayingController {
       nowPlayingInfo[MPMediaItemPropertyAlbumTitle] =
         "Paragraph \(current) of \(total)"
     }
-    MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+
+    let center = MPNowPlayingInfoCenter.default()
+    center.nowPlayingInfo = nowPlayingInfo
+    // iOS 13+ Control Center tracks this, not just the playback rate — without
+    // it the widget shows the wrong play/pause state and can look unresponsive.
+    switch state {
+    case .playing:
+      center.playbackState = .playing
+    case .paused:
+      center.playbackState = .paused
+    default:
+      center.playbackState = .stopped
+    }
   }
 
   func clear() {
-    MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    let center = MPNowPlayingInfoCenter.default()
+    center.nowPlayingInfo = nil
+    center.playbackState = .stopped
   }
 }

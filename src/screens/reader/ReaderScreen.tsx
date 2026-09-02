@@ -9,6 +9,7 @@ import ReaderAppbar from './components/ReaderAppbar';
 import ReaderFooter from './components/ReaderFooter';
 import ReaderSettingsPanel from './components/ReaderSettingsPanel';
 import ReaderPlayerScreen from './components/ReaderPlayerScreen';
+import ReaderMiniPlayer from './components/ReaderMiniPlayer';
 import { useTtsSession } from './hooks/useTtsSession';
 
 import WebViewReader from './components/WebViewReader';
@@ -224,12 +225,18 @@ export const ChapterContent = ({
   );
 
   const startTts = useCallback(() => {
+    // Already narrating (maybe from another screen) — just re-open the player,
+    // don't restart from the top.
+    if (tts.state === 'playing' || tts.state === 'paused') {
+      setPlayerVisible(true);
+      return;
+    }
     // Begin narration from the paragraph on screen, not the top of the chapter.
     webViewRef?.current?.injectJavaScript(
       '(window.tts?.startFromVisible ?? window.tts?.start)?.call(window.tts); true;',
     );
     setPlayerVisible(true);
-  }, [webViewRef]);
+  }, [tts.state, webViewRef]);
 
   // Auto-open the player when narration starts; close it when narration ends.
   useEffect(() => {
@@ -362,10 +369,20 @@ export const ChapterContent = ({
         onDismiss={() => setSettingsPanelVisible(false)}
         openReaderSheet={openReaderSheet}
       />
+      <ReaderMiniPlayer
+        visible={
+          !playerVisible && (tts.state === 'playing' || tts.state === 'paused')
+        }
+        novel={novel}
+        chapter={chapter}
+        tts={tts}
+        onExpand={() => setPlayerVisible(true)}
+      />
       <ReaderPlayerScreen
         visible={playerVisible}
         onClose={() => setPlayerVisible(false)}
         onOpenSettings={openReaderSheet}
+        onOpenContents={openDrawer}
         tts={tts}
         novel={novel}
         chapter={chapter}
