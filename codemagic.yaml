@@ -121,9 +121,16 @@ workflows:
       - name: Prebuild iOS project
         script: |
           # `--non-interactive` isn't supported; CI=1 (set in env) covers it.
-          npx expo prebuild --platform ios --no-install
-          echo "--- generated iOS project ---"
-          ls -la ios
+          npx expo prebuild --platform ios --no-install 2>&1 | tee "$CM_BUILD_DIR/prebuild.log"
+          echo "--- generated iOS project ---" | tee -a "$CM_BUILD_DIR/prebuild.log"
+          ls -la ios | tee -a "$CM_BUILD_DIR/prebuild.log"
+          # Did withSherpaOnnxFramework embed the framework in the APP project?
+          {
+            echo "=== WeLiNo.xcodeproj Sherpa refs ==="
+            grep -n -i sherpa ios/WeLiNo.xcodeproj/project.pbxproj 2>&1
+            echo "=== Embed Frameworks phases ==="
+            grep -n "Embed Frameworks" ios/WeLiNo.xcodeproj/project.pbxproj 2>&1
+          } | tee -a "$CM_BUILD_DIR/prebuild.log"
 
       - name: Install CocoaPods (honouring the root Gemfile pins)
         script: |
@@ -172,6 +179,7 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - ios/Podfile.lock
       - sherpa-vendor.log
+      - prebuild.log
       - pod-install.log
 
     publishing:

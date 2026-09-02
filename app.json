@@ -41,6 +41,7 @@
       ],
       "expo-web-browser",
       "./plugins/withReaderAssets",
+      "./plugins/withSherpaOnnxFramework",
       [
         "expo-build-properties",
         {
