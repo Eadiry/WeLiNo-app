@@ -1,10 +1,16 @@
 import AVFAudio
 import Foundation
-import NitroModules
 
 #if canImport(SherpaOnnxC)
   import SherpaOnnxC
 #endif
+
+/// Carries a readable message all the way to the reader's error banner
+/// (a bare `Error` surfaces as "NitroModules.RuntimeError error 0").
+struct KokoroError: LocalizedError {
+  let message: String
+  var errorDescription: String? { message }
+}
 
 /// On-device Kokoro synthesis, used by `TtsPlaybackCoordinator` only when the
 /// reader picks `engineKind == "kokoro"`. Everything here is dormant until then
@@ -55,8 +61,9 @@ final class KokoroSpeechEngine {
       let tokens = modelDir + "/tokens.txt"
       let dataDir = modelDir + "/espeak-ng-data"
       for path in [model, voices, tokens] where !fm.fileExists(atPath: path) {
-        throw RuntimeError.error(withMessage: "Kokoro model file missing: \(path)")
+        throw KokoroError(message: "Kokoro model file missing: \(path)")
       }
+      let haveData = fm.fileExists(atPath: dataDir)
 
       destroyHandle()
 
@@ -85,15 +92,21 @@ final class KokoroSpeechEngine {
       config.max_num_sentences = 1
 
       guard let handle = SherpaOnnxCreateOfflineTts(&config) else {
-        throw RuntimeError.error(withMessage: "Kokoro engine failed to initialise.")
+        throw KokoroError(
+          message:
+            "sherpa-onnx rejected the Kokoro model"
+            + (haveData ? "" : " (espeak-ng-data folder is missing)")
+            + "."
+        )
       }
       tts = handle
       sampleRate = Double(SherpaOnnxOfflineTtsSampleRate(handle))
       if sampleRate <= 0 { sampleRate = 24_000 }
       loadedModelDir = modelDir
     #else
-      throw RuntimeError.error(
-        withMessage: "This build was compiled without the Kokoro engine."
+      throw KokoroError(
+        message:
+          "Kokoro engine is not in this build — sherpa-onnx did not link."
       )
     #endif
   }
@@ -107,6 +120,9 @@ final class KokoroSpeechEngine {
     }
     do {
       try prepare(modelDir: modelDir)
+    } catch let error as KokoroError {
+      onError?(error.message)
+      return
     } catch {
       onError?(error.localizedDescription)
       return
