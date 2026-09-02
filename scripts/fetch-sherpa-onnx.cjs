@@ -6,12 +6,13 @@
  *
  * k2-fsa publishes the iOS xcframeworks under a dedicated `xcframework`
  * release tag with three variants. We use `ios-shared-onnxruntime-static`:
- * sherpa-onnx as a *dynamic* `sherpa-onnx.xcframework` with ONNX Runtime
- * statically linked *inside* it — one self-contained framework, nothing else
- * to link. (The `ios-static` variant does NOT bundle ONNX Runtime, so it left
- * `_OrtGetApiBase` & friends undefined at Ld — build #31.) The inner framework
- * is `sherpa-onnx.framework`; its bundled modulemap names the Clang module
- * `SherpaOnnxC`, which is what `KokoroSpeechEngine.swift` imports.
+ * the zip contains a single `SherpaOnnxC.xcframework` — a *dynamic*
+ * `SherpaOnnxC.framework` (binary `SherpaOnnxC`) with ONNX Runtime statically
+ * linked *inside* it, so there is nothing else to link. Its bundled
+ * `Modules/module.modulemap` names the Clang module `SherpaOnnxC`, which is
+ * what `KokoroSpeechEngine.swift` imports. (The `ios-static` variant does NOT
+ * bundle ONNX Runtime — that left `_OrtGetApiBase` & friends undefined at Ld,
+ * build #31.)
  *
  * Being a dynamic framework it needs an embed + code-sign phase, which
  * CocoaPods adds automatically for a `vendored_frameworks` entry — no manual
@@ -54,6 +55,20 @@ const MARKER = path.join(VENDOR_DIR, '.vendored-asset');
 const log = msg => process.stdout.write(`[fetch-sherpa-onnx] ${msg}\n`);
 const run = (cmd, cwd) => execSync(cmd, { stdio: 'inherit', cwd });
 
+/** Print what the podspec / Swift compiler will actually see under vendor/. */
+function logLayout() {
+  log('vendored layout:');
+  try {
+    run(
+      `find "${VENDOR_DIR}" -maxdepth 4 ` +
+        `\\( -name Info.plist -o -name module.modulemap -o -type d -name "*.framework" \\) ` +
+        `| sed "s#${VENDOR_DIR}/##"`,
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
 function existingXcframeworks() {
   if (!fs.existsSync(VENDOR_DIR)) return [];
   return fs
@@ -78,6 +93,7 @@ function main() {
     marked === ASSET
   ) {
     log(`already vendored from ${ASSET} — nothing to do.`);
+    logLayout();
     return;
   }
 
@@ -116,6 +132,7 @@ function main() {
   }
   fs.writeFileSync(MARKER, `${ASSET}\n`);
   fs.rmSync(tmp, { recursive: true, force: true });
+  logLayout();
 }
 
 try {

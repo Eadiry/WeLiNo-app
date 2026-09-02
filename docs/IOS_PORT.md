@@ -346,7 +346,7 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
      `scripts/fetch-sherpa-onnx.cjs` downloads
      `sherpa-onnx-v<VER>-ios-shared-onnxruntime-static.xcframework.zip` from the
      `xcframework` release tag → one self-contained _dynamic_
-     `sherpa-onnx.xcframework` (ONNX Runtime statically linked inside, bundled
+     `SherpaOnnxC.xcframework` (ONNX Runtime statically linked inside, bundled
      clang module `SherpaOnnxC`) into `modules/nitro-tts/ios/vendor/`
      (gitignored, macOS/CI); `NitroTts.podspec` lists it in
      `vendored_frameworks`, so CocoaPods links, embeds, and signs it;

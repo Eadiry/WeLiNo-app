@@ -17,8 +17,8 @@ struct KokoroError: LocalizedError {
 /// — the coordinator never touches this type on the system-`AVSpeechSynthesizer`
 /// path.
 ///
-/// `scripts/fetch-sherpa-onnx.cjs` vendors `sherpa-onnx.xcframework` (the
-/// `ios-shared-onnxruntime-static` build — a dynamic `sherpa-onnx.framework`
+/// `scripts/fetch-sherpa-onnx.cjs` vendors `SherpaOnnxC.xcframework` (the
+/// `ios-shared-onnxruntime-static` build — a dynamic `SherpaOnnxC.framework`
 /// with ONNX Runtime statically linked inside it, bundled clang module
 /// `SherpaOnnxC`) into `modules/nitro-tts/ios/vendor/`, linked and embedded by
 /// `NitroTts.podspec`. When it's absent the whole file compiles as a no-op via
