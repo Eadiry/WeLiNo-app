@@ -40,7 +40,7 @@ import {
   isPluginIssueReportUrl,
 } from '../utils/sanitizeChapterText';
 import { READER_CSS, READER_SCRIPTS } from '../utils/readerAssets';
-import { engineDir } from '@services/tts/voiceRepository';
+import { engineDir, KOKORO_SUPPORTED } from '@services/tts/voiceRepository';
 
 export type WebViewPostEvent = {
   type: string;
@@ -91,8 +91,12 @@ const toNativeTtsSettings = (
   settings: ChapterReaderSettings['tts'],
 ): TtsSettings => {
   // iOS on-device Kokoro: the native engine reads `kokoroModelDir` and takes
-  // the speaker index through `voiceIdentifier`.
-  if (settings?.engineKind === 'kokoro' && settings.kokoroEngineId) {
+  // the speaker index through `voiceIdentifier`. Disabled — see KOKORO_SUPPORTED.
+  if (
+    KOKORO_SUPPORTED &&
+    settings?.engineKind === 'kokoro' &&
+    settings.kokoroEngineId
+  ) {
     return {
       engineKind: 'kokoro',
       kokoroModelDir: engineDir(settings.kokoroEngineId),

@@ -21,6 +21,7 @@ import { getString } from '@i18n/translations';
 import { Chip } from 'react-native-paper';
 import ReaderSheetPreferenceItem from './ReaderSheetPreferenceItem';
 import {
+  KOKORO_SUPPORTED,
   listInstalledKokoroVoices,
   type InstalledKokoroVoice,
 } from '@services/tts/voiceRepository';
@@ -400,8 +401,10 @@ const TTSTab: React.FC = () => {
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
   const [kokoroVoices, setKokoroVoices] = useState<InstalledKokoroVoice[]>([]);
   const [kokoroModalVisible, setKokoroModalVisible] = useState(false);
-  const engineKind = tts?.engineKind === 'kokoro' ? 'kokoro' : 'system';
-  const kokoroAvailable = Platform.OS === 'ios' && kokoroVoices.length > 0;
+  const engineKind =
+    KOKORO_SUPPORTED && tts?.engineKind === 'kokoro' ? 'kokoro' : 'system';
+  const kokoroAvailable =
+    KOKORO_SUPPORTED && Platform.OS === 'ios' && kokoroVoices.length > 0;
 
   // Android only; resolves empty on iOS, which hides the Engine row below.
   useEffect(() => {
@@ -441,7 +444,7 @@ const TTSTab: React.FC = () => {
   // Installed on-device Kokoro voices (iOS). Refetched on mount, on foreground
   // and whenever a picker opens — a bundle may have finished downloading.
   const loadKokoroVoices = useCallback(() => {
-    if (Platform.OS !== 'ios') {
+    if (!KOKORO_SUPPORTED || Platform.OS !== 'ios') {
       return;
     }
     listInstalledKokoroVoices()

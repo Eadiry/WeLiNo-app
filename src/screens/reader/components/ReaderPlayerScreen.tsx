@@ -10,6 +10,7 @@ import { ChapterInfo, NovelInfo } from '@database/types';
 import { Tts, TtsVoice } from '@modules/nitro-tts';
 import { VoicePickerModal } from './ReaderBottomSheet/TTSTab';
 import {
+  KOKORO_SUPPORTED,
   listInstalledKokoroVoices,
   type InstalledKokoroVoice,
 } from '@services/tts/voiceRepository';
@@ -48,7 +49,7 @@ const ReaderPlayerScreen: React.FC<ReaderPlayerScreenProps> = ({
   const [voiceSheet, setVoiceSheet] = useState(false);
   const [voices, setVoices] = useState<TtsVoice[]>([]);
   const [kokoroVoices, setKokoroVoices] = useState<InstalledKokoroVoice[]>([]);
-  const isKokoro = ttsSettings?.engineKind === 'kokoro';
+  const isKokoro = KOKORO_SUPPORTED && ttsSettings?.engineKind === 'kokoro';
 
   useSleepTimer({
     mode: sleepMode,

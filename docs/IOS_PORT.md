@@ -335,10 +335,21 @@ controls on a real device (LNReader's iOS TTS has never been exercised).
 3. **Text pipeline** before `load()`: persistent character-name substitution,
    offline MTL cleanup, LanguageTool deep-clean, CJK auto-romanisation.
    Port from the Capacitor WeLiNo repo (`src/pipeline/`, `src/substitution/`).
-4. **On-device Kokoro TTS** — _scaffolded (commits after `8acc1917`); native
-   link/inference bring-up still needs a Mac / TestFlight pass._
-   Kokoro-82M as a second synthesis engine alongside `AVSpeechSynthesizer`,
-   fully on the phone. **iOS only**; Android stays on system TTS.
+4. **On-device Kokoro TTS** — _**disabled** (`KOKORO_SUPPORTED = false` in
+   `src/services/tts/voiceRepository.ts`)._ It got as far as building, linking,
+   embedding and launching on TestFlight, but loading the model into ONNX
+   Runtime pushed the app to ~560 MB and iOS jetsammed it every time (int8
+   model, streamed unzip and `releaseResources()` weren't enough — see the
+   2026-09-02 git log). The `sherpa-onnx` framework vendoring, the
+   `withSherpaOnnxFramework` embed plugin and the CI vendor step are removed;
+   `KokoroSpeechEngine.swift`, `NitroTts.podspec`'s vendored-framework block and
+   the voice-repo code are kept behind the flag for a possible **MLX**-based
+   revisit (`mlalma/kokoro-ios`) or a lighter model (**Piper** medium ≈ 60 MB,
+   also runs through `sherpa-onnx`). The reader hides the Engine row / Kokoro
+   voice picker and Settings hides "Voice repositories" while the flag is off.
+   Android stays on system TTS regardless.
+
+   _Original design, for reference:_
 
    - **Inference stack: `k2-fsa/sherpa-onnx`** prebuilt iOS xcframework
      (Apache-2.0) — bundles ONNX Runtime + espeak-ng phonemization + Kokoro,

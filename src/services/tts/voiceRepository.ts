@@ -5,6 +5,14 @@ import { getEnabledVoiceRepositoriesFromDb } from '@database/queries/VoiceReposi
 import { TTS_STORAGE } from '@utils/Storages';
 
 /**
+ * On-device Kokoro (sherpa-onnx + ONNX Runtime) is disabled. Loading the model
+ * pushed the app past ~560 MB and iOS jetsammed it — see the 2026-09-02 saga in
+ * the git log. The engine + repo code is kept in the tree for a possible
+ * MLX-based revisit; the UI hides every entry point behind this flag.
+ */
+export const KOKORO_SUPPORTED = false;
+
+/**
  * On-device TTS voice repositories — same shape as the plugin repositories, but
  * the manifest describes a synthesis **engine bundle** (a Kokoro model + its
  * data files) plus the **voices** it offers.

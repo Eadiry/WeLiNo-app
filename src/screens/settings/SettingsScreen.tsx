@@ -5,6 +5,7 @@ import { useTheme } from '@hooks/persisted';
 
 import { getString } from '@i18n/translations';
 import { SettingsScreenProps } from '@navigators/types';
+import { KOKORO_SUPPORTED } from '@services/tts/voiceRepository';
 
 const SettingsScreen = ({ navigation }: SettingsScreenProps) => {
   const theme = useTheme();
@@ -67,17 +68,19 @@ const SettingsScreen = ({ navigation }: SettingsScreenProps) => {
           }
           theme={theme}
         />
-        <List.Item
-          title="Voice repositories"
-          description="On-device Kokoro TTS voices"
-          icon="account-voice"
-          onPress={() =>
-            navigation.navigate('SettingsStack', {
-              screen: 'VoiceRepositorySettings',
-            })
-          }
-          theme={theme}
-        />
+        {KOKORO_SUPPORTED ? (
+          <List.Item
+            title="Voice repositories"
+            description="On-device Kokoro TTS voices"
+            icon="account-voice"
+            onPress={() =>
+              navigation.navigate('SettingsStack', {
+                screen: 'VoiceRepositorySettings',
+              })
+            }
+            theme={theme}
+          />
+        ) : null}
         <List.Item
           title="Custom Code"
           icon="code-braces"

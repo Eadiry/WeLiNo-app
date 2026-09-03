@@ -57,11 +57,6 @@ workflows:
         - $HOME/Library/pnpm/store
         # The pinned cocoapods/xcodeproj gems (small, stable).
         - $CM_BUILD_DIR/vendor/bundle
-        # Prebuilt sherpa-onnx xcframework (ONNX Runtime baked in) for the
-        # on-device Kokoro TTS engine — large + stable: a good cache fit. The
-        # fetch script re-downloads if the cached copy is from a different
-        # release asset, so a stale cache self-heals.
-        - $CM_BUILD_DIR/modules/nitro-tts/ios/vendor
     triggering:
       events:
         - push
@@ -96,18 +91,6 @@ workflows:
           # reader works on iOS (committed too; this keeps it in sync).
           pnpm generate:reader-assets
 
-      - name: Vendor sherpa-onnx (on-device Kokoro TTS)
-        script: |
-          # Downloads the prebuilt SherpaOnnxC.xcframework into
-          # modules/nitro-tts/ios/vendor/ (cached). If it fails, the build still
-          # succeeds — KokoroSpeechEngine.swift compiles as a no-op and the app
-          # ships with Kokoro unavailable. Output is teed to an artifact because
-          # this pre-build step is otherwise invisible outside the Codemagic UI.
-          node scripts/fetch-sherpa-onnx.cjs 2>&1 | tee "$CM_BUILD_DIR/sherpa-vendor.log" || true
-          echo "--- modules/nitro-tts/ios/vendor ---" | tee -a "$CM_BUILD_DIR/sherpa-vendor.log"
-          ls -la modules/nitro-tts/ios/vendor 2>&1 | tee -a "$CM_BUILD_DIR/sherpa-vendor.log" || true
-          find modules/nitro-tts/ios/vendor -maxdepth 4 2>&1 | tee -a "$CM_BUILD_DIR/sherpa-vendor.log" || true
-
       - name: Prepare ccache
         script: |
           brew list ccache >/dev/null 2>&1 || brew install ccache
@@ -121,16 +104,9 @@ workflows:
       - name: Prebuild iOS project
         script: |
           # `--non-interactive` isn't supported; CI=1 (set in env) covers it.
-          npx expo prebuild --platform ios --no-install 2>&1 | tee "$CM_BUILD_DIR/prebuild.log"
-          echo "--- generated iOS project ---" | tee -a "$CM_BUILD_DIR/prebuild.log"
-          ls -la ios | tee -a "$CM_BUILD_DIR/prebuild.log"
-          # Did withSherpaOnnxFramework embed the framework in the APP project?
-          {
-            echo "=== WeLiNo.xcodeproj Sherpa refs ==="
-            grep -n -i sherpa ios/WeLiNo.xcodeproj/project.pbxproj 2>&1
-            echo "=== Embed Frameworks phases ==="
-            grep -n "Embed Frameworks" ios/WeLiNo.xcodeproj/project.pbxproj 2>&1
-          } | tee -a "$CM_BUILD_DIR/prebuild.log"
+          npx expo prebuild --platform ios --no-install
+          echo "--- generated iOS project ---"
+          ls -la ios
 
       - name: Install CocoaPods (honouring the root Gemfile pins)
         script: |
@@ -140,16 +116,7 @@ workflows:
           bundle config set --local path "vendor/bundle"
           bundle install --jobs 4
           cd ios
-          bundle exec pod install 2>&1 | tee "$CM_BUILD_DIR/pod-install.log"
-          # Did the SherpaOnnxC link flags actually reach the xcconfigs?
-          {
-            echo "=== NitroTts.release.xcconfig ==="
-            cat "Pods/Target Support Files/NitroTts/NitroTts.release.xcconfig" 2>&1
-            echo "=== Pods-WeLiNo.release.xcconfig (Sherpa lines) ==="
-            grep -n -i sherpa "Pods/Target Support Files/Pods-WeLiNo/Pods-WeLiNo.release.xcconfig" 2>&1
-            echo "=== project.pbxproj Sherpa refs ==="
-            grep -c -i sherpa Pods/Pods.xcodeproj/project.pbxproj 2>&1
-          } | tee -a "$CM_BUILD_DIR/pod-install.log"
+          bundle exec pod install
 
       - name: Set up code signing
         script: xcode-project use-profiles
@@ -178,9 +145,6 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - ios/Podfile.lock
-      - sherpa-vendor.log
-      - prebuild.log
-      - pod-install.log
 
     publishing:
       app_store_connect:
