@@ -75,24 +75,101 @@ enum ZipReader {
       guard dataStart + compressedSize <= data.count else {
         throw ZipError.corrupt("entry data")
       }
-      let compressed = data.subdata(in: dataStart..<(dataStart + compressedSize))
-
-      let payload: Data
-      switch method {
-      case 0:
-        payload = compressed
-      case 8:
-        payload = try inflate(compressed, expectedSize: uncompressedSize)
-      default:
-        throw ZipError.unsupported("compression method \(method)")
-      }
 
       let fileURL = destURL.appendingPathComponent(name)
       try fm.createDirectory(
         at: fileURL.deletingLastPathComponent(),
         withIntermediateDirectories: true
       )
-      try payload.write(to: fileURL, options: .atomic)
+
+      // Stream the entry straight to disk. A voice-bundle member can be
+      // 100+ MB; holding it (or its inflate buffer) in RAM spikes the app
+      // into a jetsam. `data` is memory-mapped, so slicing it doesn't copy.
+      switch method {
+      case 0:
+        try write(data, range: dataStart..<(dataStart + compressedSize), to: fileURL)
+      case 8:
+        try inflate(
+          data,
+          range: dataStart..<(dataStart + compressedSize),
+          expectedSize: uncompressedSize,
+          to: fileURL
+        )
+      default:
+        throw ZipError.unsupported("compression method \(method)")
+      }
+    }
+  }
+
+  private static let chunkSize = 256 * 1024
+
+  /// Copies `data[range]` to `fileURL` in chunks (STORE entries).
+  private static func write(
+    _ data: Data, range: Range<Int>, to fileURL: URL
+  ) throws {
+    FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+    let handle = try FileHandle(forWritingTo: fileURL)
+    defer { try? handle.close() }
+    var pos = range.lowerBound
+    while pos < range.upperBound {
+      let end = min(pos + chunkSize, range.upperBound)
+      try handle.write(contentsOf: data.subdata(in: pos..<end))
+      pos = end
+    }
+  }
+
+  /// Inflates DEFLATE `data[range]` to `fileURL` in fixed-size chunks via the
+  /// streaming `compression_stream` API — constant memory regardless of size.
+  private static func inflate(
+    _ data: Data, range: Range<Int>, expectedSize: Int, to fileURL: URL
+  ) throws {
+    FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+    let handle = try FileHandle(forWritingTo: fileURL)
+    defer { try? handle.close() }
+    if expectedSize == 0 { return }
+
+    var stream = compression_stream(
+      dst_ptr: UnsafeMutablePointer<UInt8>(bitPattern: 1)!,
+      dst_size: 0,
+      src_ptr: UnsafePointer<UInt8>(bitPattern: 1)!,
+      src_size: 0,
+      state: nil
+    )
+    guard
+      compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB)
+        == COMPRESSION_STATUS_OK
+    else { throw ZipError.corrupt("inflate init") }
+    defer { compression_stream_destroy(&stream) }
+
+    let dst = UnsafeMutablePointer<UInt8>.allocate(capacity: chunkSize)
+    defer { dst.deallocate() }
+
+    var total = 0
+    try data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+      let base = raw.bindMemory(to: UInt8.self).baseAddress!
+      stream.src_ptr = base + range.lowerBound
+      stream.src_size = range.count
+      var status = COMPRESSION_STATUS_OK
+      repeat {
+        stream.dst_ptr = dst
+        stream.dst_size = chunkSize
+        status = compression_stream_process(
+          &stream, Int32(COMPRESSION_STREAM_FINALIZE.rawValue)
+        )
+        switch status {
+        case COMPRESSION_STATUS_OK, COMPRESSION_STATUS_END:
+          let produced = chunkSize - stream.dst_size
+          if produced > 0 {
+            try handle.write(contentsOf: Data(bytes: dst, count: produced))
+            total += produced
+          }
+        default:
+          throw ZipError.corrupt("inflate status \(status.rawValue)")
+        }
+      } while status == COMPRESSION_STATUS_OK
+    }
+    guard total == expectedSize else {
+      throw ZipError.corrupt("inflate produced \(total)/\(expectedSize) bytes")
     }
   }
 
@@ -107,27 +184,6 @@ enum ZipReader {
       i -= 1
     }
     throw ZipError.notAZip
-  }
-
-  private static func inflate(_ input: Data, expectedSize: Int) throws -> Data {
-    if expectedSize == 0 { return Data() }
-    var output = Data(count: expectedSize)
-    let written = output.withUnsafeMutableBytes { dst -> Int in
-      input.withUnsafeBytes { src -> Int in
-        compression_decode_buffer(
-          dst.bindMemory(to: UInt8.self).baseAddress!,
-          expectedSize,
-          src.bindMemory(to: UInt8.self).baseAddress!,
-          input.count,
-          nil,
-          COMPRESSION_ZLIB
-        )
-      }
-    }
-    guard written == expectedSize else {
-      throw ZipError.corrupt("inflate produced \(written)/\(expectedSize) bytes")
-    }
-    return output
   }
 
   private static func readU16(_ data: Data, _ offset: Int) -> UInt16 {

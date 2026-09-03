@@ -64,8 +64,32 @@ final class KokoroSpeechEngine {
       for path in [model, voices, tokens] where !fm.fileExists(atPath: path) {
         throw KokoroError(message: "Kokoro model file missing: \(path)")
       }
+      // A truncated extract (old in-RAM unzip could be jetsammed mid-write)
+      // passes the exists check, then ONNX Runtime aborts the whole process
+      // parsing it. Catch the obvious cases as a readable error instead.
+      func fileBytes(_ path: String) -> Int {
+        ((try? fm.attributesOfItem(atPath: path))?[.size] as? Int) ?? 0
+      }
+      let modelBytes = fileBytes(model)
+      let voiceBytes = fileBytes(voices)
+      if modelBytes < 50_000_000 || voiceBytes < 5_000_000 {
+        throw KokoroError(
+          message:
+            "Kokoro model looks incomplete (model \(modelBytes / 1_000_000) MB, "
+            + "voices \(voiceBytes / 1_000_000) MB). Remove and re-download the "
+            + "voice pack."
+        )
+      }
+      for f in ["phondata", "phonindex", "phontab"]
+      where !fm.fileExists(atPath: dataDir + "/" + f) {
+        throw KokoroError(
+          message: "Kokoro speech data is incomplete (espeak-ng-data/\(f) "
+            + "missing). Remove and re-download the voice pack."
+        )
+      }
       let haveData = fm.fileExists(atPath: dataDir)
 
+      NSLog("[Kokoro] loading model \(modelBytes / 1_000_000) MB from \(modelDir)")
       destroyHandle()
 
       var kokoro = SherpaOnnxOfflineTtsKokoroModelConfig()
@@ -82,7 +106,9 @@ final class KokoroSpeechEngine {
 
       var modelConfig = SherpaOnnxOfflineTtsModelConfig()
       modelConfig.kokoro = kokoro
-      modelConfig.num_threads = 2
+      // 1 thread: fewer per-thread ORT arenas — keeps the load-time memory
+      // spike down (this runs on a phone fighting jetsam, not a desktop).
+      modelConfig.num_threads = 1
       modelConfig.debug = 0
       let cProvider = strdup("cpu")
       defer { free(cProvider) }
@@ -101,6 +127,7 @@ final class KokoroSpeechEngine {
         )
       }
       tts = handle
+      NSLog("[Kokoro] model ready")
       sampleRate = Double(SherpaOnnxOfflineTtsSampleRate(handle))
       if sampleRate <= 0 { sampleRate = 24_000 }
       loadedModelDir = modelDir
