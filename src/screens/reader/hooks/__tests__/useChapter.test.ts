@@ -16,6 +16,7 @@ const mockGetNextChapter = jest.fn();
 const mockGetPrevChapter = jest.fn();
 const mockInsertChapters = jest.fn();
 const mockInsertHistory = jest.fn();
+const mockGetNameSubstitutions = jest.fn().mockResolvedValue([]);
 const mockFetchChapter = jest.fn();
 const mockFetchPage = jest.fn();
 const mockSanitizeChapterText = jest.fn();
@@ -50,6 +51,11 @@ jest.mock('@database/queries/ChapterQueries', () => ({
 
 jest.mock('@database/queries/HistoryQueries', () => ({
   insertHistory: (...args: unknown[]) => mockInsertHistory(...args),
+}));
+
+jest.mock('@database/queries/NameSubstitutionQueries', () => ({
+  getNameSubstitutions: (...args: unknown[]) =>
+    mockGetNameSubstitutions(...args),
 }));
 
 jest.mock('@services/plugin/fetch', () => ({

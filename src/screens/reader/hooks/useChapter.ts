@@ -6,6 +6,8 @@ import {
   insertChapters,
 } from '@database/queries/ChapterQueries';
 import { insertHistory } from '@database/queries/HistoryQueries';
+import { getNameSubstitutions } from '@database/queries/NameSubstitutionQueries';
+import { applySubstitutions } from '@services/nameSubstitution';
 import { ChapterInfo, NovelInfo } from '@database/types';
 import {
   useAppSettings,
@@ -345,13 +347,19 @@ export default function useChapter(
         // the current `progress` — the cached adjacent-chapter objects can be
         // stale (e.g. swiping back to a chapter you were part-way through).
         const htmlPromise = loadChapterHtml(requested);
-        const [dbChapter, html] = await Promise.all([
+        const [dbChapter, html, subs] = await Promise.all([
           getDbChapter(requested.id),
           htmlPromise,
+          // Per-novel character-name substitution rules — re-read every load so
+          // edits take effect on the next chapter (not the current one).
+          getNameSubstitutions(novel.id),
         ]);
         if (isStale()) {
           return;
         }
+        const substitutedHtml = subs.length
+          ? applySubstitutions(html, subs).text
+          : html;
 
         let chap = dbChapter ?? requested;
         if (openAtEnd) {
@@ -360,7 +368,7 @@ export default function useChapter(
           chap = { ...chap, progress: 100 };
         }
         setChapter(chap);
-        setChapterText(html);
+        setChapterText(substitutedHtml);
         setAdjacentChapter(NO_ADJACENT_CHAPTERS);
         setLoading(false);
 
@@ -373,7 +381,7 @@ export default function useChapter(
         setLoading(false);
       }
     },
-    [loadChapterHtml, resolveAdjacentChapters],
+    [loadChapterHtml, resolveAdjacentChapters, novel.id],
   );
 
   /**

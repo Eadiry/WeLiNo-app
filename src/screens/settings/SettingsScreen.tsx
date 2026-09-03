@@ -82,6 +82,17 @@ const SettingsScreen = ({ navigation }: SettingsScreenProps) => {
           />
         ) : null}
         <List.Item
+          title="Character name substitutions"
+          description="Per-novel find/replace for names, applied to text and TTS"
+          icon="account-switch-outline"
+          onPress={() =>
+            navigation.navigate('SettingsStack', {
+              screen: 'NameSubstitutionSettings',
+            })
+          }
+          theme={theme}
+        />
+        <List.Item
           title="Custom Code"
           icon="code-braces"
           onPress={() => navigation.navigate('CustomCode')}
