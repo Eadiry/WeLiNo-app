@@ -83,6 +83,34 @@ describe('loadPaperbackPlugin', () => {
     );
     expect(plugin).toBeUndefined();
   });
+
+  it('falls through to the legacy adapter for an older-generation bundle', async () => {
+    // A minimal real v1-convention bundle (Browserify UMD, bare globals —
+    // see paperbackLegacyAdapter.test.ts for the fuller fixture/rationale).
+    // Doesn't match the 0.9 `var source = (...)({})` convention at all, so
+    // this only passes if loadPaperbackPlugin actually falls through rather
+    // than just returning undefined from the first attempt.
+    const legacyBundle = `
+      (function(f){
+        if (typeof exports === "object" && typeof module !== "undefined") { module.exports = f(); }
+      })(function(){
+        class LegacySource {
+          constructor(cheerio) { this.cheerio = cheerio; }
+          async getMangaDetails(mangaId) {
+            return { titles: ['Legacy Manga'], image: 'https://example.com/legacy.jpg', status: 1 };
+          }
+          async getChapters(mangaId) { return []; }
+          async getChapterDetails(mangaId, chapterId) { return { id: chapterId, mangaId, pages: [], longStrip: false }; }
+        }
+        return { LegacySource: LegacySource };
+      });
+    `;
+
+    const plugin = loadPaperbackPlugin('LegacySource', legacyBundle);
+    expect(plugin).toBeDefined();
+    const manga = await plugin!.parseManga('m1');
+    expect(manga.name).toBe('Legacy Manga');
+  });
 });
 
 describe('fetchPaperbackRepositoryPlugins', () => {

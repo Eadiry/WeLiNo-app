@@ -177,6 +177,62 @@ describe('installTemplateMangaPlugin', () => {
   });
 });
 
+describe('installMangaPlugin — Paperback filename fallback', () => {
+  it('retries with source.js when index.js is not a loadable bundle (the real 0.8-repo shape)', async () => {
+    // A minimal real v1-convention bundle — see paperbackLegacyAdapter.test.ts
+    // for the fuller fixture/rationale. Its constructor never touches
+    // cheerio, so the mocked `cheerio.load` stub in this file is fine.
+    const legacyBundle = `
+      (function(f){
+        if (typeof exports === "object" && typeof module !== "undefined") { module.exports = f(); }
+      })(function(){
+        class LegacySource {
+          constructor(cheerio) { this.cheerio = cheerio; }
+          async getMangaDetails(mangaId) {
+            return { titles: ['Legacy Manga'], image: 'https://example.com/legacy.jpg', status: 1 };
+          }
+          async getChapters(mangaId) { return []; }
+          async getChapterDetails(mangaId, chapterId) { return { id: chapterId, mangaId, pages: [], longStrip: false }; }
+        }
+        return { LegacySource: LegacySource };
+      });
+    `;
+    const plugin = {
+      id: 'LegacySource',
+      name: 'Legacy Source',
+      url: 'https://example.com/repo/LegacySource/index.js',
+      format: 'paperback',
+    } as PluginItem & { format: 'paperback' };
+
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockImplementationOnce(
+        async () =>
+          ({ text: async () => '<!DOCTYPE html>not found' } as Response),
+      )
+      .mockImplementationOnce(
+        async () => ({ text: async () => legacyBundle } as Response),
+      );
+
+    const installed = await installMangaPlugin(plugin);
+
+    // Not positional (toHaveBeenNthCalledWith) — other tests in this file
+    // leave their own `jest.spyOn(global, 'fetch')` mocks unrestored, so
+    // absolute call position isn't reliable here, only that both URLs were
+    // requested somewhere.
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://example.com/repo/LegacySource/index.js',
+      expect.anything(),
+    );
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://example.com/repo/LegacySource/source.js',
+      expect.anything(),
+    );
+    expect(installed).toMatchObject({ id: 'LegacySource' });
+    fetchSpy.mockRestore();
+  });
+});
+
 describe('installMangaPlugin', () => {
   it('does not register a plugin when its bundle cannot be persisted', async () => {
     const plugin = {

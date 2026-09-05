@@ -90,13 +90,32 @@ const initPlugin = (
 const plugins: Record<string, MangaPlugin | undefined> = {};
 export const INSTALLED_MANGA_PLUGINS_KEY = 'INSTALL_MANGA_PLUGINS';
 
+const fetchPluginCode = (url: string) =>
+  fetch(url, {
+    headers: { 'pragma': 'no-cache', 'cache-control': 'no-cache' },
+  }).then(res => res.text());
+
 const installMangaPlugin = async (
   _plugin: MangaPluginItem,
 ): Promise<MangaPlugin | undefined> => {
-  const rawCode = await fetch(_plugin.url, {
-    headers: { 'pragma': 'no-cache', 'cache-control': 'no-cache' },
-  }).then(res => res.text());
-  const plugin = initPlugin(_plugin.id, rawCode, _plugin.format);
+  let rawCode = await fetchPluginCode(_plugin.url);
+  let plugin = initPlugin(_plugin.id, rawCode, _plugin.format);
+  // Paperback's older (0.8) bundle generation is served as `source.js`, not
+  // `index.js` — fetchPaperbackRepositoryPlugins always assumes the latter
+  // (correct for the main Inkdex registry and the even-older v1 generation,
+  // both confirmed to use `index.js` too), so a 0.8 repo's first fetch here
+  // is that repo's own 404 page, not code. Retry once with the other
+  // filename before giving up — cheap, and avoids needing a third
+  // repository format just for a filename difference.
+  if (
+    !plugin &&
+    _plugin.format === 'paperback' &&
+    _plugin.url.endsWith('index.js')
+  ) {
+    const altUrl = _plugin.url.replace(/index\.js$/, 'source.js');
+    rawCode = await fetchPluginCode(altUrl);
+    plugin = initPlugin(_plugin.id, rawCode, _plugin.format);
+  }
   if (!plugin) {
     return undefined;
   }

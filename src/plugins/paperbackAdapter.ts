@@ -1,4 +1,5 @@
 import { createPaperbackApplication } from './helpers/paperbackApplication';
+import { loadPaperbackLegacySource } from './paperbackLegacyAdapter';
 import {
   MangaStatus,
   type MangaChapterItem,
@@ -102,6 +103,15 @@ const evalPaperbackBundle = (
   return registry ?? {};
 };
 
+/**
+ * Tries the current (0.9) `Application`-global format first; if that
+ * doesn't yield a working extension for `pluginId`, falls through to
+ * `paperbackLegacyAdapter.ts` on the *same* fetched code — a content-based
+ * fallback (same spirit as the CMS-template detector's `detect()`) rather
+ * than a format flag the repository metadata or the user has to get right.
+ * Real repos ship one format or the other; trying both costs nothing when
+ * the first attempt fails cleanly.
+ */
 export const loadPaperbackPlugin = (
   pluginId: string,
   code: string,
@@ -110,22 +120,21 @@ export const loadPaperbackPlugin = (
     const application = createPaperbackApplication(pluginId);
     const registry = evalPaperbackBundle(code, application);
     const extension = registry[pluginId];
-    if (!extension || typeof extension.getMangaDetails !== 'function') {
-      return undefined;
+    if (extension && typeof extension.getMangaDetails === 'function') {
+      return wrapPaperbackExtension(pluginId, extension);
     }
-    return wrapPaperbackExtension(pluginId, extension);
   } catch (error) {
     // Not silent: a bundle that loads but is the wrong API generation (a
     // real, confirmed failure mode — see knownPaperbackRepositories.ts)
     // throws here, and swallowing it looks identical to "not a Paperback
-    // bundle at all" from the caller's side. Loud in dev, still resolves to
-    // undefined so install/browse flows degrade the same way either way.
+    // bundle at all" from the caller's side. Loud in dev; still falls
+    // through to the legacy attempt below either way.
     if (__DEV__) {
       // eslint-disable-next-line no-console
       console.warn(`[paperbackAdapter] failed to load "${pluginId}":`, error);
     }
-    return undefined;
   }
+  return loadPaperbackLegacySource(pluginId, code);
 };
 
 const mapStatus = (status?: string): MangaStatus => {
