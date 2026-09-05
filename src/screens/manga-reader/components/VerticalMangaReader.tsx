@@ -1,11 +1,24 @@
-import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from 'react';
+import {
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 
 import MangaPageImage from '@components/MangaPageImage';
 import type { ImageRequestInit } from '@plugins/types';
 import type { ThemeColors } from '@theme/types';
 import type { MangaReaderHandle } from './readerHandle';
+import { autoScrollStepPerTick, AUTO_SCROLL_TICK_MS } from './autoScroll';
 
 interface VerticalMangaReaderProps {
   pages: string[];
@@ -14,6 +27,10 @@ interface VerticalMangaReaderProps {
   initialPage?: number;
   /** Horizontal page inset as a fraction of screen width per side (0–0.25). */
   sidePadding?: number;
+  /** When true, the list auto-advances downward on a timer. */
+  autoScroll?: boolean;
+  /** 1–10 speed level for `autoScroll`. */
+  autoScrollSpeed?: number;
   /** Furthest page seen, as a 0-100 percentage (mirrors the novel reader's scroll-% `progress` field) and the raw page index (`lastPageRead`). */
   onProgress: (percent: number, pageIndex: number) => void;
   onTap?: () => void;
@@ -36,6 +53,8 @@ const VerticalMangaReader = forwardRef<
       theme,
       initialPage = 0,
       sidePadding = 0,
+      autoScroll = false,
+      autoScrollSpeed = 5,
       onProgress,
       onTap,
     },
@@ -45,11 +64,34 @@ const VerticalMangaReader = forwardRef<
     const pageWidth = width * (1 - sidePadding * 2);
     const listRef = useRef<LegendListRef>(null);
     const furthestRef = useRef(initialPage);
+    const offsetRef = useRef(0);
+    const draggingRef = useRef(false);
 
     useImperativeHandle(ref, () => ({
       goToPage: (index: number) =>
         listRef.current?.scrollToIndex({ index, animated: false }),
     }));
+
+    const onScroll = useCallback(
+      (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        offsetRef.current = e.nativeEvent.contentOffset.y;
+      },
+      [],
+    );
+
+    useEffect(() => {
+      if (!autoScroll) return;
+      const step = autoScrollStepPerTick(autoScrollSpeed);
+      const id = setInterval(() => {
+        if (draggingRef.current) return;
+        offsetRef.current += step;
+        listRef.current?.scrollToOffset({
+          offset: offsetRef.current,
+          animated: false,
+        });
+      }, AUTO_SCROLL_TICK_MS);
+      return () => clearInterval(id);
+    }, [autoScroll, autoScrollSpeed]);
 
     const handleViewableItemsChanged = useCallback(
       ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
@@ -76,6 +118,14 @@ const VerticalMangaReader = forwardRef<
         initialScrollIndex={initialPage}
         estimatedItemSize={width * 1.45}
         onViewableItemsChanged={handleViewableItemsChanged}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        onScrollBeginDrag={() => {
+          draggingRef.current = true;
+        }}
+        onScrollEndDrag={() => {
+          draggingRef.current = false;
+        }}
         renderItem={({ item }) => (
           <View style={[styles.slot, { width }]}>
             <MangaPageImage

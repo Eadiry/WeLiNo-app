@@ -4,6 +4,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -17,10 +18,11 @@ import { MODE_OPTIONS, type ReaderMode } from './readerModes';
  * The reader's settings sheet — a rounded bottom card (same
  * native-alert-style shell the reading-mode picker used, which the user
  * approved) listing the settings from the reference app that this reader
- * actually supports today: the reading mode and the side padding. Rotation
- * lock, crop borders and autoscroll are intentionally absent (rotation
- * needs a native module the user declined; the other two are their own
- * follow-ups) rather than shown as dead rows.
+ * actually supports: reading mode, side padding, and autoscroll (the last
+ * two apply only to the continuous/webtoon readers). Rotation lock, crop
+ * borders and tap zones are intentionally absent (rotation needs a native
+ * module the user declined; the others are their own follow-ups) rather
+ * than shown as dead rows.
  */
 interface MangaReaderSettingsSheetProps {
   visible: boolean;
@@ -29,6 +31,10 @@ interface MangaReaderSettingsSheetProps {
   onModeChange: (mode: ReaderMode) => void;
   sidePadding: number;
   onSidePaddingChange: (value: number) => void;
+  autoScroll: boolean;
+  onAutoScrollChange: (value: boolean) => void;
+  autoScrollSpeed: number;
+  onAutoScrollSpeedChange: (value: number) => void;
 }
 
 const MangaReaderSettingsSheet: React.FC<MangaReaderSettingsSheetProps> = ({
@@ -38,6 +44,10 @@ const MangaReaderSettingsSheet: React.FC<MangaReaderSettingsSheetProps> = ({
   onModeChange,
   sidePadding,
   onSidePaddingChange,
+  autoScroll,
+  onAutoScrollChange,
+  autoScrollSpeed,
+  onAutoScrollSpeedChange,
 }) => {
   const theme = useTheme();
 
@@ -113,6 +123,49 @@ const MangaReaderSettingsSheet: React.FC<MangaReaderSettingsSheetProps> = ({
               onSlidingComplete={onSidePaddingChange}
             />
 
+            <View
+              style={[styles.divider, { backgroundColor: theme.outline }]}
+            />
+
+            <View style={styles.paddingRow}>
+              <View>
+                <Text style={[styles.label, { color: theme.onSurface }]}>
+                  Autoscroll
+                </Text>
+                <Text style={[styles.hint, { color: theme.onSurfaceVariant }]}>
+                  Continuous & webtoon modes
+                </Text>
+              </View>
+              <Switch
+                value={autoScroll}
+                onValueChange={onAutoScrollChange}
+                trackColor={{ true: theme.primary }}
+              />
+            </View>
+            {autoScroll ? (
+              <>
+                <View style={styles.paddingRow}>
+                  <Text style={[styles.label, { color: theme.onSurface }]}>
+                    Speed
+                  </Text>
+                  <Text
+                    style={[styles.value, { color: theme.onSurfaceVariant }]}
+                  >
+                    {autoScrollSpeed}
+                  </Text>
+                </View>
+                <Slider
+                  style={styles.slider}
+                  value={autoScrollSpeed}
+                  min={1}
+                  max={10}
+                  step={1}
+                  onValueChange={onAutoScrollSpeedChange}
+                  onSlidingComplete={onAutoScrollSpeedChange}
+                />
+              </>
+            ) : null}
+
             <View style={styles.footer}>
               <Pressable onPress={onDismiss} hitSlop={8}>
                 <Text style={[styles.close, { color: theme.primary }]}>
@@ -146,6 +199,7 @@ const styles = StyleSheet.create({
   close: { fontSize: 16, fontWeight: '600' },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
   footer: { alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12 },
+  hint: { fontSize: 12, marginTop: 2 },
   label: { fontSize: 16 },
   paddingRow: {
     alignItems: 'center',

@@ -43,7 +43,8 @@ import type { MangaChapterScreenProps } from '@navigators/types';
 const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
   const theme = useTheme();
   const { top, bottom } = useSafeAreaInsets();
-  const { sidePadding, setMangaReaderSettings } = useMangaReaderSettings();
+  const { sidePadding, autoScroll, autoScrollSpeed, setMangaReaderSettings } =
+    useMangaReaderSettings();
   const [manga, setManga] = useState(route.params.manga);
   const [chapters] = useState(route.params.chapters);
   const [index, setIndex] = useState(route.params.initialIndex);
@@ -214,6 +215,8 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
             initialPage={lastPageRead}
             rtl={readerMode === 'continuousRtl'}
             sidePadding={sidePadding}
+            autoScroll={autoScroll}
+            autoScrollSpeed={autoScrollSpeed}
             onProgress={onVerticalProgress}
             onTap={toggleChrome}
           />
@@ -228,6 +231,8 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
             theme={theme}
             initialPage={lastPageRead}
             sidePadding={sidePadding}
+            autoScroll={autoScroll}
+            autoScrollSpeed={autoScrollSpeed}
             onProgress={onVerticalProgress}
             onTap={toggleChrome}
           />
@@ -240,6 +245,8 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
     theme,
     lastPageRead,
     sidePadding,
+    autoScroll,
+    autoScrollSpeed,
     onPagedChange,
     onVerticalProgress,
     toggleChrome,
@@ -376,6 +383,12 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
         onModeChange={setReaderMode}
         sidePadding={sidePadding}
         onSidePaddingChange={v => setMangaReaderSettings({ sidePadding: v })}
+        autoScroll={autoScroll}
+        onAutoScrollChange={v => setMangaReaderSettings({ autoScroll: v })}
+        autoScrollSpeed={autoScrollSpeed}
+        onAutoScrollSpeedChange={v =>
+          setMangaReaderSettings({ autoScrollSpeed: v })
+        }
       />
     </View>
   );

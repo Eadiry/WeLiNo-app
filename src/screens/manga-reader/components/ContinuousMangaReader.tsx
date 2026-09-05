@@ -1,17 +1,25 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
 } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 
 import MangaPageImage from '@components/MangaPageImage';
 import type { ImageRequestInit } from '@plugins/types';
 import type { ThemeColors } from '@theme/types';
 import type { MangaReaderHandle } from './readerHandle';
+import { autoScrollStepPerTick, AUTO_SCROLL_TICK_MS } from './autoScroll';
 
 interface ContinuousMangaReaderProps {
   pages: string[];
@@ -22,6 +30,10 @@ interface ContinuousMangaReaderProps {
   rtl?: boolean;
   /** Horizontal page inset as a fraction of screen width per side (0–0.25). */
   sidePadding?: number;
+  /** When true, the strip auto-advances along its scroll axis on a timer. */
+  autoScroll?: boolean;
+  /** 1–10 speed level for `autoScroll`. */
+  autoScrollSpeed?: number;
   /** Furthest page seen (in original, non-reversed page order), as a 0-100 percentage and the raw page index — same shape as `VerticalMangaReader`'s `onProgress`. */
   onProgress: (percent: number, pageIndex: number) => void;
   onTap?: () => void;
@@ -53,6 +65,8 @@ const ContinuousMangaReader = forwardRef<
       initialPage = 0,
       rtl = false,
       sidePadding = 0,
+      autoScroll = false,
+      autoScrollSpeed = 5,
       onProgress,
       onTap,
     },
@@ -62,6 +76,8 @@ const ContinuousMangaReader = forwardRef<
     const pageWidth = width * (1 - sidePadding * 2);
     const listRef = useRef<LegendListRef>(null);
     const furthestRef = useRef(initialPage);
+    const offsetRef = useRef(0);
+    const draggingRef = useRef(false);
 
     const displayPages = useMemo(
       () => (rtl ? [...pages].reverse() : pages),
@@ -85,6 +101,29 @@ const ContinuousMangaReader = forwardRef<
           animated: false,
         }),
     }));
+
+    const onScroll = useCallback(
+      (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        offsetRef.current = e.nativeEvent.contentOffset.x;
+      },
+      [],
+    );
+
+    useEffect(() => {
+      if (!autoScroll) return;
+      // A right-to-left strip scrolls toward offset 0, so advance the
+      // other way for it.
+      const step = autoScrollStepPerTick(autoScrollSpeed) * (rtl ? -1 : 1);
+      const id = setInterval(() => {
+        if (draggingRef.current) return;
+        offsetRef.current = Math.max(0, offsetRef.current + step);
+        listRef.current?.scrollToOffset({
+          offset: offsetRef.current,
+          animated: false,
+        });
+      }, AUTO_SCROLL_TICK_MS);
+      return () => clearInterval(id);
+    }, [autoScroll, autoScrollSpeed, rtl]);
 
     const handleViewableItemsChanged = useCallback(
       ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
@@ -112,6 +151,14 @@ const ContinuousMangaReader = forwardRef<
         initialScrollIndex={toDisplayIndex(initialPage)}
         estimatedItemSize={width}
         onViewableItemsChanged={handleViewableItemsChanged}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        onScrollBeginDrag={() => {
+          draggingRef.current = true;
+        }}
+        onScrollEndDrag={() => {
+          draggingRef.current = false;
+        }}
         renderItem={({ item }) => (
           <View style={[styles.slot, { width }]}>
             <MangaPageImage
