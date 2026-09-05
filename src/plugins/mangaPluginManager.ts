@@ -108,16 +108,27 @@ const initPlugin = (
 const plugins: Record<string, MangaPlugin | undefined> = {};
 export const INSTALLED_MANGA_PLUGINS_KEY = 'INSTALL_MANGA_PLUGINS';
 
-const fetchPluginCode = (url: string) =>
-  fetch(url, {
+interface FetchedCode {
+  code: string;
+  status: number;
+  ok: boolean;
+}
+
+const fetchPluginCode = async (url: string): Promise<FetchedCode> => {
+  const res = await fetch(url, {
     headers: { 'pragma': 'no-cache', 'cache-control': 'no-cache' },
-  }).then(res => res.text());
+  });
+  const code = await res.text();
+  return { code, status: res.status, ok: res.ok };
+};
 
 const installMangaPlugin = async (
   _plugin: MangaPluginItem,
 ): Promise<MangaPlugin | undefined> => {
-  let rawCode = await fetchPluginCode(_plugin.url);
-  let plugin = initPlugin(_plugin, rawCode);
+  const attempts: FetchedCode[] = [];
+  let fetched = await fetchPluginCode(_plugin.url);
+  attempts.push(fetched);
+  let plugin = initPlugin(_plugin, fetched.code);
   // Paperback's older (0.8) bundle generation is served as `source.js`, not
   // `index.js` — fetchPaperbackRepositoryPlugins always assumes the latter
   // (correct for the main Inkdex registry and the even-older v1 generation,
@@ -131,11 +142,32 @@ const installMangaPlugin = async (
     _plugin.url.endsWith('index.js')
   ) {
     const altUrl = _plugin.url.replace(/index\.js$/, 'source.js');
-    rawCode = await fetchPluginCode(altUrl);
-    plugin = initPlugin(_plugin, rawCode);
+    fetched = await fetchPluginCode(altUrl);
+    attempts.push(fetched);
+    plugin = initPlugin(_plugin, fetched.code);
   }
   if (!plugin) {
-    return undefined;
+    // Confirmed real gap: this used to return undefined silently, and the
+    // UI's only fallback was a generic "Could not install X" toast with no
+    // diagnostic content — every real bundle this adapter has been tested
+    // against (across multiple rounds, direct-content tests) loads
+    // successfully, so a real user-reported failure here almost certainly
+    // has a network-layer cause (a non-200 response, an empty/truncated
+    // body, a captive-portal or CDN error page) rather than a parsing bug
+    // — but there was no way to tell which without this. Throwing with the
+    // actual HTTP status and response shape turns the next occurrence into
+    // something diagnosable from the toast alone instead of another
+    // unreproducible "it doesn't work" report.
+    const details = attempts
+      .map(
+        a =>
+          `status ${a.status}${a.ok ? '' : ' (not ok)'}, ${
+            a.code.length
+          } bytes` +
+          (a.code.trim() ? `, starts with: ${a.code.slice(0, 60).trim()}` : ''),
+      )
+      .join('; then ');
+    throw new Error(`Could not load a recognizable plugin bundle (${details})`);
   }
   let currentPlugin = plugins[plugin.id];
   if (!currentPlugin || newer(plugin.version, currentPlugin.version)) {
@@ -154,7 +186,7 @@ const installMangaPlugin = async (
     } else if (await NativeFile.exists(customCSSPath)) {
       await NativeFile.unlink(customCSSPath);
     }
-    await NativeFile.writeFile(pluginPath, rawCode);
+    await NativeFile.writeFile(pluginPath, fetched.code);
     plugins[plugin.id] = plugin;
     currentPlugin = plugin;
   }
