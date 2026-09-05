@@ -8,9 +8,12 @@ const clientId = ANILIST_CLIENT_ID;
 
 const redirectUri = Linking.createURL('tracker/AL');
 
-const searchQuery = `query($search: String) {
+// AniList's own `type` enum is ANIME/MANGA — light novels are catalogued
+// *under* MANGA with `format: NOVEL` (there's no separate light-novel
+// type), so real manga just needs `format: MANGA` on the same query.
+const searchQuery = (format: 'NOVEL' | 'MANGA') => `query($search: String) {
   Page {
-    media(search: $search, type: MANGA, format: NOVEL, sort: POPULARITY_DESC) {
+    media(search: $search, type: MANGA, format: ${format}, sort: POPULARITY_DESC) {
       id
       chapters
       title {
@@ -42,96 +45,108 @@ const updateListEntryMutation = `mutation($id: Int!, $status: MediaListStatus, $
   }
 }`;
 
-export const aniListTracker = {
-  authenticate: async () => {
-    if (!clientId) {
-      throw new Error('AniList client ID is not configured');
-    }
+/** `format`: 'NOVEL' for light novels (the app's original/default tracker), 'MANGA' for manga/manhwa/manhua. */
+export const createAniListTracker = (format: 'NOVEL' | 'MANGA') =>
+  ({
+    authenticate: async () => {
+      if (!clientId) {
+        throw new Error('AniList client ID is not configured');
+      }
 
-    const authUrl = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&response_type=token`;
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-    if (result.type === 'success') {
-      const { url } = result;
+      const authUrl = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&response_type=token`;
+      const result = await WebBrowser.openAuthSessionAsync(
+        authUrl,
+        redirectUri,
+      );
+      if (result.type === 'success') {
+        const { url } = result;
 
-      const keyVal: Record<string, string> = {};
-      url
-        .split('#')[1]
-        .split('&')
-        .forEach(k => {
-          const split = k.split('=');
-          keyVal[split[0]] = split[1];
-        });
-      const accessToken = keyVal.access_token;
-      // The expiration date is provided in seconds, so we convert to milliseconds to construct a date
-      const expiresAt = new Date(Number(keyVal.expires_at) * 1000);
+        const keyVal: Record<string, string> = {};
+        url
+          .split('#')[1]
+          .split('&')
+          .forEach(k => {
+            const split = k.split('=');
+            keyVal[split[0]] = split[1];
+          });
+        const accessToken = keyVal.access_token;
+        // The expiration date is provided in seconds, so we convert to milliseconds to construct a date
+        const expiresAt = new Date(Number(keyVal.expires_at) * 1000);
 
+        const { data } = await queryAniList(
+          '{ Viewer { id mediaListOptions { scoreFormat } } }',
+          {},
+          { accessToken },
+        );
+
+        return {
+          accessToken,
+          // AniList does not support refresh tokens.
+          refreshToken: undefined,
+          expiresAt,
+          meta: {
+            // Updating list entries requires the user ID
+            userId: data.Viewer.id,
+            // AniList supports multiple user-facing score formats (numbers, stars, smilies)
+            scoreFormat: data.Viewer.mediaListOptions.scoreFormat,
+          },
+        };
+      }
+    },
+    // AniList does not support refresh tokens, so we can't re-authenticate the user.
+    revalidate: undefined,
+    handleSearch: async (search, auth) => {
       const { data } = await queryAniList(
-        '{ Viewer { id mediaListOptions { scoreFormat } } }',
-        {},
-        { accessToken },
+        searchQuery(format),
+        { search },
+        auth,
+      );
+
+      return data.Page.media.map((m: any) => {
+        return {
+          id: m.id,
+          title: m.title.userPreferred,
+          coverImage: m.coverImage.extraLarge,
+          totalChapters: m.chapters || undefined,
+        };
+      });
+    },
+    getUserListEntry: async (id, auth) => {
+      const { data } = await queryAniList(
+        getListEntryQuery,
+        { userId: auth.meta!.userId, mediaId: id },
+        auth,
       );
 
       return {
-        accessToken,
-        // AniList does not support refresh tokens.
-        refreshToken: undefined,
-        expiresAt,
-        meta: {
-          // Updating list entries requires the user ID
-          userId: data.Viewer.id,
-          // AniList supports multiple user-facing score formats (numbers, stars, smilies)
-          scoreFormat: data.Viewer.mediaListOptions.scoreFormat,
+        status: data.MediaList?.status || 'CURRENT',
+        progress: data.MediaList?.progress || 0,
+        score: data.MediaList?.score || 0,
+        totalChapters: data.MediaList?.media.chapters || null,
+      };
+    },
+    updateUserListEntry: async (id, payload, auth) => {
+      const { data } = await queryAniList(
+        updateListEntryMutation,
+        {
+          id,
+          status: payload.status,
+          progress: Math.round(payload.progress || 1),
+          score: payload.score,
         },
-      };
-    }
-  },
-  // AniList does not support refresh tokens, so we can't re-authenticate the user.
-  revalidate: undefined,
-  handleSearch: async (search, auth) => {
-    const { data } = await queryAniList(searchQuery, { search }, auth);
+        auth,
+      );
 
-    return data.Page.media.map((m: any) => {
       return {
-        id: m.id,
-        title: m.title.userPreferred,
-        coverImage: m.coverImage.extraLarge,
-        totalChapters: m.chapters || undefined,
+        status: data.SaveMediaListEntry?.status || 'CURRENT',
+        progress: data.SaveMediaListEntry?.progress || 0,
+        score: data.SaveMediaListEntry?.score || 0,
       };
-    });
-  },
-  getUserListEntry: async (id, auth) => {
-    const { data } = await queryAniList(
-      getListEntryQuery,
-      { userId: auth.meta!.userId, mediaId: id },
-      auth,
-    );
+    },
+  } as Tracker<{ userId: number; scoreFormat: string }>);
 
-    return {
-      status: data.MediaList?.status || 'CURRENT',
-      progress: data.MediaList?.progress || 0,
-      score: data.MediaList?.score || 0,
-      totalChapters: data.MediaList?.media.chapters || null,
-    };
-  },
-  updateUserListEntry: async (id, payload, auth) => {
-    const { data } = await queryAniList(
-      updateListEntryMutation,
-      {
-        id,
-        status: payload.status,
-        progress: Math.round(payload.progress || 1),
-        score: payload.score,
-      },
-      auth,
-    );
-
-    return {
-      status: data.SaveMediaListEntry?.status || 'CURRENT',
-      progress: data.SaveMediaListEntry?.progress || 0,
-      score: data.SaveMediaListEntry?.score || 0,
-    };
-  },
-} as Tracker<{ userId: number; scoreFormat: string }>;
+export const aniListTracker = createAniListTracker('NOVEL');
+export const aniListMangaTracker = createAniListTracker('MANGA');
 
 export async function queryAniList(
   query: string,

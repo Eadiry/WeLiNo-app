@@ -332,7 +332,15 @@ function ratingTwentyToScore(ratingTwenty: number | null): number {
   return ratingTwenty / 2;
 }
 
-export const kitsuTracker: Tracker<KitsuAuthMeta> = {
+/**
+ * `mediaType`: 'novel' filters Kitsu's `kind:manga` search results down to
+ * `subtype === 'novel'` (light novels are a subtype *within* Kitsu's
+ * "manga" kind category, alongside manga/manhwa/manhua/oneshot — the app's
+ * original/default tracker); 'manga' excludes the novel subtype instead.
+ */
+export const createKitsuTracker = (
+  mediaType: 'novel' | 'manga',
+): Tracker<KitsuAuthMeta> => ({
   authenticate: async () => {
     /**
      * Authentication is handled by authenticateWithCredentials
@@ -384,9 +392,12 @@ export const kitsuTracker: Tracker<KitsuAuthMeta> = {
       const algoliaKey = await getAlgoliaKey(auth.accessToken);
       const hits = await algoliaSearch(algoliaKey, search);
 
-      /* Filter to only include novels (subtype === 'novel') */
       return hits
-        .filter(hit => hit.subtype === 'novel')
+        .filter(hit =>
+          mediaType === 'novel'
+            ? hit.subtype === 'novel'
+            : hit.subtype !== 'novel',
+        )
         .map(hit => ({
           id: hit.id,
           title: hit.canonicalTitle,
@@ -486,4 +497,7 @@ export const kitsuTracker: Tracker<KitsuAuthMeta> = {
       throw new Error('Failed to update Kitsu entry');
     }
   },
-};
+});
+
+export const kitsuTracker = createKitsuTracker('novel');
+export const kitsuMangaTracker = createKitsuTracker('manga');

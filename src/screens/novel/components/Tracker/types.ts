@@ -2,6 +2,8 @@ import { ImageSourcePropType } from 'react-native';
 
 import {
   SearchResult,
+  Tracker,
+  TrackerName,
   UserListEntry,
   UserListStatus,
 } from '@services/Trackers';
@@ -36,6 +38,11 @@ export interface TrackSearchDialogProps extends BaseDialogProps {
   tracker: TrackerMetadata;
   novelName: string;
   onTrackNovel: (tracker: TrackerMetadata, novel: SearchResult) => void;
+  /** Resolves which tracker configuration to search with — defaults to
+   * the novel-configured trackers (`getTracker` from `useTracker.ts`).
+   * Manga's `MangaTrackSheet` passes `getMangaTracker` instead so search
+   * queries manga/manhwa/manhua rather than light novels. */
+  getTracker?: (name: TrackerName) => Tracker;
 }
 
 export interface AddTrackingCardProps {

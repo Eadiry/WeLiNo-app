@@ -65,7 +65,17 @@ export async function authenticateWithCredentials(
   };
 }
 
-export const mangaUpdatesTracker: Tracker = {
+/**
+ * `mediaType`: 'novel' narrows MangaUpdates' search to `filter_types:
+ * ['drama cd', 'novel']` (the app's original/default tracker); 'manga'
+ * searches unrestricted — MangaUpdates' catalog is manga/manhwa/manhua by
+ * default, that filter exists specifically to narrow it down to novels.
+ * Every other endpoint (list entry, rating, update) is keyed by a plain
+ * `series_id` with no media-type distinction in the API at all.
+ */
+export const createMangaUpdatesTracker = (
+  mediaType: 'novel' | 'manga',
+): Tracker => ({
   authenticate: async () => {
     /*
      * Authentication is handled by authenticateWithCredentials
@@ -99,7 +109,9 @@ export const mangaUpdatesTracker: Tracker = {
       },
       body: JSON.stringify({
         search,
-        filter_types: ['drama cd', 'novel'],
+        ...(mediaType === 'novel'
+          ? { filter_types: ['drama cd', 'novel'] }
+          : {}),
       }),
     });
 
@@ -261,4 +273,7 @@ export const mangaUpdatesTracker: Tracker = {
       throw new Error('Failed to update MangaUpdates entry');
     }
   },
-};
+});
+
+export const mangaUpdatesTracker = createMangaUpdatesTracker('novel');
+export const mangaUpdatesMangaTracker = createMangaUpdatesTracker('manga');

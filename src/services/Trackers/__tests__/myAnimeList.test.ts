@@ -1,4 +1,4 @@
-import { myAnimeListTracker } from '../myAnimeList';
+import { myAnimeListTracker, myAnimeListMangaTracker } from '../myAnimeList';
 
 jest.mock('expo-linking', () => ({
   createURL: jest.fn(() => 'lnreader://tracker/MAL'),
@@ -72,5 +72,61 @@ describe('MyAnimeList tracker', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('handleSearch media-type filtering', () => {
+    const searchResponse = {
+      data: [
+        {
+          node: {
+            id: 1,
+            title: 'A Light Novel',
+            media_type: 'light_novel',
+            main_picture: { large: 'ln.jpg' },
+          },
+        },
+        {
+          node: {
+            id: 2,
+            title: 'A Manga',
+            media_type: 'manga',
+            main_picture: { large: 'manga.jpg' },
+          },
+        },
+        {
+          node: {
+            id: 3,
+            title: 'A Manhwa',
+            media_type: 'manhwa',
+            main_picture: { large: 'manhwa.jpg' },
+          },
+        },
+      ],
+    };
+
+    it('the default (novel) tracker keeps only light_novel results', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        status: 200,
+        json: jest.fn().mockResolvedValue(searchResponse),
+      } as unknown as Response);
+
+      const results = await myAnimeListTracker.handleSearch('test', auth);
+      expect(results).toEqual([
+        { id: 1, title: 'A Light Novel', coverImage: 'ln.jpg' },
+      ]);
+    });
+
+    it('the manga tracker excludes light_novel results, keeping manga/manhwa/etc.', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        status: 200,
+        json: jest.fn().mockResolvedValue(searchResponse),
+      } as unknown as Response);
+
+      const results = await myAnimeListMangaTracker.handleSearch('test', auth);
+      expect(results).toEqual([
+        { id: 2, title: 'A Manga', coverImage: 'manga.jpg' },
+        { id: 3, title: 'A Manhwa', coverImage: 'manhwa.jpg' },
+      ]);
+    });
   });
 });

@@ -31,7 +31,17 @@ const normalizedToMal: Record<UserListStatus, string> = {
   REPEATING: 'reading;true', // MAL has a bool for repeating, so we'll special case this
 };
 
-export const myAnimeListTracker: Tracker = {
+/**
+ * `mediaType`: 'novel' for light novels (the app's original/default
+ * tracker) filters MAL's `/v2/manga` search down to `media_type ===
+ * 'light_novel'`; 'manga' excludes light novels instead, keeping
+ * manga/manhwa/manhua/one_shot/doujinshi/oel results. MAL's `/manga`
+ * endpoint and list-entry API are shared across all these media types —
+ * only the search filter differs.
+ */
+export const createMyAnimeListTracker = (
+  mediaType: 'novel' | 'manga',
+): Tracker => ({
   authenticate: async () => {
     if (!clientId) {
       throw new Error('MyAnimeList client ID is not configured');
@@ -107,7 +117,11 @@ export const myAnimeListTracker: Tracker = {
 
     const { data } = await response.json();
     return data
-      .filter((e: any) => e.node.media_type === 'light_novel')
+      .filter((e: any) =>
+        mediaType === 'novel'
+          ? e.node.media_type === 'light_novel'
+          : e.node.media_type !== 'light_novel',
+      )
       .map((e: any) => {
         return {
           id: e.node.id,
@@ -147,7 +161,10 @@ export const myAnimeListTracker: Tracker = {
     };
   },
   updateUserListEntry: updateMyAnimeListEntry,
-};
+});
+
+export const myAnimeListTracker = createMyAnimeListTracker('novel');
+export const myAnimeListMangaTracker = createMyAnimeListTracker('manga');
 
 async function updateMyAnimeListEntry(
   id: number | string,

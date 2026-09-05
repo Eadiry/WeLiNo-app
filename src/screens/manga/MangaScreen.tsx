@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActivityIndicator, Button } from 'react-native-paper';
+import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 
 import { EmptyView, SafeAreaView, SegmentedControl } from '@components';
 import NovelCoverImage from '@components/NovelCoverImage';
 import { useTheme } from '@hooks/persisted';
+import MangaTrackSheet from './components/MangaTrackSheet';
 
 import { dbManager } from '@database/db';
 import { mangaSchema, type MangaRow } from '@database/schema';
@@ -50,6 +52,7 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
   const [error, setError] = useState<string>();
   const [chapters, setChapters] = useState<DisplayMangaChapter[]>([]);
   const [busy, setBusy] = useState(false);
+  const trackSheetRef = useRef<BottomSheetModalMethods | null>(null);
 
   const plugin = getMangaPlugin(pluginId);
 
@@ -169,15 +172,26 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
           </View>
         </View>
 
-        <Button
-          mode={inLibrary ? 'outlined' : 'contained'}
-          onPress={toggleLibrary}
-          loading={busy}
-          disabled={busy}
-          style={styles.libraryButton}
-        >
-          {inLibrary ? 'In library' : 'Add to library'}
-        </Button>
+        <View style={styles.actionRow}>
+          <Button
+            mode={inLibrary ? 'outlined' : 'contained'}
+            onPress={toggleLibrary}
+            loading={busy}
+            disabled={busy}
+            style={styles.libraryButton}
+          >
+            {inLibrary ? 'In library' : 'Add to library'}
+          </Button>
+          {dbManga ? (
+            <Button
+              mode="outlined"
+              onPress={() => trackSheetRef.current?.present()}
+              style={styles.libraryButton}
+            >
+              Track
+            </Button>
+          ) : null}
+        </View>
 
         {dbManga ? (
           <View style={styles.readerModeRow}>
@@ -224,6 +238,13 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
           </Text>
         ))}
       </ScrollView>
+      {dbManga ? (
+        <MangaTrackSheet
+          bottomSheetRef={trackSheetRef}
+          mangaId={dbManga.id}
+          mangaName={dbManga.name}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -231,6 +252,7 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
 export default MangaScreen;
 
 const styles = StyleSheet.create({
+  actionRow: { flexDirection: 'row', gap: 8 },
   centerLoading: { flex: 1, justifyContent: 'center' },
   chapterRow: { paddingVertical: 10 },
   content: { padding: 16 },
@@ -238,7 +260,7 @@ const styles = StyleSheet.create({
   genres: { fontSize: 12, marginTop: 8 },
   headerDetails: { flex: 1, marginStart: 16 },
   headerRow: { flexDirection: 'row' },
-  libraryButton: { marginTop: 16 },
+  libraryButton: { flex: 1, marginTop: 16 },
   readerModeRow: { marginTop: 16 },
   sectionHeading: {
     fontSize: 13,

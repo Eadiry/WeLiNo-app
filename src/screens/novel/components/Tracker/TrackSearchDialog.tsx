@@ -10,7 +10,7 @@ import MaterialCommunityIcons from '@react-native-vector-icons/material-design-i
 import { LegendList } from '@legendapp/list/react-native';
 
 import { Dialog, NovelCoverImage } from '@components';
-import { getTracker, useTheme } from '@hooks/persisted';
+import { getTracker as getNovelTracker, useTheme } from '@hooks/persisted';
 import { getString } from '@i18n/translations';
 import { SearchResult } from '@services/Trackers';
 import { TrackSearchDialogProps } from './types';
@@ -23,6 +23,7 @@ const TrackSearchDialog: React.FC<TrackSearchDialogProps> = ({
   visible,
   onDismiss,
   novelName,
+  getTracker = getNovelTracker,
 }) => {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
@@ -70,7 +71,7 @@ const TrackSearchDialog: React.FC<TrackSearchDialogProps> = ({
         }
       }
     },
-    [tracker.auth, tracker.name],
+    [tracker.auth, tracker.name, getTracker],
   );
 
   const cancelScheduledSearch = useCallback(() => {

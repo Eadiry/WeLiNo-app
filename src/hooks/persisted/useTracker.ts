@@ -1,8 +1,17 @@
 import { AuthenticationResult, Tracker, TrackerName } from '@services/Trackers';
-import { aniListTracker } from '@services/Trackers/aniList';
-import { myAnimeListTracker } from '@services/Trackers/myAnimeList';
-import { mangaUpdatesTracker } from '@services/Trackers/mangaUpdates';
-import { kitsuTracker } from '@services/Trackers/kitsu';
+import {
+  aniListTracker,
+  aniListMangaTracker,
+} from '@services/Trackers/aniList';
+import {
+  myAnimeListTracker,
+  myAnimeListMangaTracker,
+} from '@services/Trackers/myAnimeList';
+import {
+  mangaUpdatesTracker,
+  mangaUpdatesMangaTracker,
+} from '@services/Trackers/mangaUpdates';
+import { kitsuTracker, kitsuMangaTracker } from '@services/Trackers/kitsu';
 import { useMMKVObject, useMMKVString } from 'react-native-mmkv';
 import { useEffect } from 'react';
 import {
@@ -27,8 +36,24 @@ const trackers: Record<TrackerName, Tracker> = {
   Kitsu: kitsuTracker,
 };
 
+// Same trackers, configured to search/track manga instead of light novels
+// (see each tracker's `create*Tracker` factory) — auth is shared (a MAL
+// login is a MAL login regardless of media type), only the underlying
+// search/query behavior differs, so this is a separate lookup table, not
+// a separate auth flow.
+const mangaTrackers: Record<TrackerName, Tracker> = {
+  AniList: aniListMangaTracker,
+  MyAnimeList: myAnimeListMangaTracker,
+  MangaUpdates: mangaUpdatesMangaTracker,
+  Kitsu: kitsuMangaTracker,
+};
+
 export const getTracker = (name: TrackerName) => {
   return trackers[name];
+};
+
+export const getMangaTracker = (name: TrackerName) => {
+  return mangaTrackers[name];
 };
 
 export const getAllTrackerNames = (): TrackerName[] => {

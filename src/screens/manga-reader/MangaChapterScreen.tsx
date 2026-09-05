@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyView, SafeAreaView } from '@components';
 import { useTheme } from '@hooks/persisted';
+import { useTrackedManga } from '@hooks/persisted/useTrackedManga';
 import { getMangaPlugin } from '@plugins/mangaPluginManager';
 import { dbManager } from '@database/db';
 import { mangaSchema, type MangaRow } from '@database/schema';
@@ -50,6 +51,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
     'readerMode' in manga ? manga.readerMode : 'vertical';
 
   const plugin = getMangaPlugin(manga.pluginId);
+  const { updateAllTrackedManga } = useTrackedManga(mangaId ?? 'NO_ID');
 
   const loadChapter = useCallback(async () => {
     setPages(undefined);
@@ -63,10 +65,17 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
       if (typeof chapter.id === 'number') {
         markMangaChapterRead(chapter.id);
       }
+      // Manga has no scroll-percentage concept to gate on (unlike the
+      // novel reader's `useChapter.ts`'s 97%-read threshold) — a chapter
+      // is either being read or it isn't, so push progress to any
+      // authenticated tracker as soon as it loads.
+      if (typeof chapter.chapterNumber === 'number') {
+        updateAllTrackedManga({ progress: chapter.chapterNumber });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [plugin, manga.pluginId, chapter]);
+  }, [plugin, manga.pluginId, chapter, updateAllTrackedManga]);
 
   useEffect(() => {
     loadChapter();
