@@ -114,7 +114,16 @@ export const loadPaperbackPlugin = (
       return undefined;
     }
     return wrapPaperbackExtension(pluginId, extension);
-  } catch {
+  } catch (error) {
+    // Not silent: a bundle that loads but is the wrong API generation (a
+    // real, confirmed failure mode — see knownPaperbackRepositories.ts)
+    // throws here, and swallowing it looks identical to "not a Paperback
+    // bundle at all" from the caller's side. Loud in dev, still resolves to
+    // undefined so install/browse flows degrade the same way either way.
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn(`[paperbackAdapter] failed to load "${pluginId}":`, error);
+    }
     return undefined;
   }
 };
@@ -185,6 +194,18 @@ function wrapPaperbackExtension(
   pluginId: string,
   ext: PaperbackExtension,
 ): MangaPlugin {
+  // Real extensions register their request interceptors inside
+  // `initialise()` — e.g. a confirmed real bundle: `async initialise(){
+  // this.someInterceptor.registerInterceptor() }`. Skipping this call is a
+  // confirmed real failure mode: the extension loads and its methods can be
+  // called, but requests go out missing whatever the interceptor adds
+  // (cookies, rate limiting, auth), so results come back empty or wrong
+  // without ever throwing. Kicked off once here rather than in
+  // `loadPaperbackPlugin` so that function can stay synchronous (matching
+  // every other plugin loader in this codebase) — every exposed method
+  // below awaits `ready` first instead.
+  const ready = (ext.initialise?.() ?? Promise.resolve()).catch(() => {});
+
   let cachedDiscoverSections: PBDiscoverSection[] | undefined;
   const discoverSections = async () => {
     if (!ext.getDiscoverSections) return [];
@@ -203,6 +224,7 @@ function wrapPaperbackExtension(
     imageRequestInit: { headers: {} },
 
     async popularManga(pageNo): Promise<MangaSourceItem[]> {
+      await ready;
       const sections = await discoverSections();
       if (sections.length > 0 && ext.getDiscoverSectionItems) {
         const section = sections[0];
@@ -234,6 +256,7 @@ function wrapPaperbackExtension(
     },
 
     async searchManga(searchTerm, pageNo): Promise<MangaSourceItem[]> {
+      await ready;
       if (!ext.getSearchResults) return [];
       const results = await ext.getSearchResults(
         { title: searchTerm, filters: [] },

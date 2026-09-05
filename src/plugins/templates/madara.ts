@@ -51,10 +51,12 @@ const parseItemCards = ($: CheerioAPI, baseUrl: string): MangaSourceItem[] => {
       const path = absoluteUrl(baseUrl, link.attr('href'));
       const name = link.text().trim();
       const img = el.find('.item-thumb img, img').first();
-      const cover =
+      const cover = absoluteUrl(
+        baseUrl,
         img.attr('data-src')?.trim() ||
-        img.attr('data-lazy-src')?.trim() ||
-        img.attr('src')?.trim();
+          img.attr('data-lazy-src')?.trim() ||
+          img.attr('src')?.trim(),
+      );
       if (!path || !name) return undefined;
       return { id: undefined, name, path, cover };
     })
@@ -164,7 +166,11 @@ export const createMadaraPlugin = (config: TemplateConfig): MangaPlugin => {
     version: '1.0.0',
     url: baseUrl,
     iconUrl: '',
-    imageRequestInit: { headers: {} },
+    // Manga image CDNs commonly hotlink-block requests missing a Referer
+    // matching the site — a very common real-world requirement (the page
+    // HTML itself rarely checks this, only the image CDN, which is why data
+    // can load fine while every cover/page image comes back broken).
+    imageRequestInit: { headers: { Referer: baseUrl } },
 
     async popularManga(pageNo) {
       return fetchListing('views', pageNo);
@@ -196,9 +202,11 @@ export const createMadaraPlugin = (config: TemplateConfig): MangaPlugin => {
           .filter(Boolean)
           .join(', ') || undefined;
       const status = mapStatus(infoByLabel($, 'Status'));
-      const cover =
+      const cover = absoluteUrl(
+        baseUrl,
         $('.summary_image img').attr('data-src')?.trim() ||
-        $('.summary_image img').attr('src')?.trim();
+          $('.summary_image img').attr('src')?.trim(),
+      );
 
       let chapters = parseChapterListFragment($, mangaPath);
       if (chapters.length === 0) {
@@ -246,10 +254,11 @@ export const createMadaraPlugin = (config: TemplateConfig): MangaPlugin => {
         .toArray()
         .map(img => {
           const el = $(img);
-          return (
+          return absoluteUrl(
+            baseUrl,
             el.attr('data-src')?.trim() ||
-            el.attr('data-lazy-src')?.trim() ||
-            el.attr('src')?.trim()
+              el.attr('data-lazy-src')?.trim() ||
+              el.attr('src')?.trim(),
           );
         })
         .filter((src): src is string => !!src);
