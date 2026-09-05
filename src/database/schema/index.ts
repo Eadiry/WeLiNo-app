@@ -5,6 +5,10 @@ import { novelCategory } from './novelCategory';
 import { repository } from './repository';
 import { voiceRepository } from './voiceRepository';
 import { nameSubstitution } from './nameSubstitution';
+import { manga } from './manga';
+import { mangaChapter } from './mangaChapter';
+import { mangaCategory } from './mangaCategory';
+import { mangaRepository } from './mangaRepository';
 
 export {
   category as categorySchema,
@@ -37,6 +41,22 @@ export {
   type NameSubstitutionRow,
   type NameSubstitutionInsert,
 } from './nameSubstitution';
+export { manga as mangaSchema, type MangaRow, type MangaInsert } from './manga';
+export {
+  mangaChapter as mangaChapterSchema,
+  type MangaChapterRow,
+  type MangaChapterInsert,
+} from './mangaChapter';
+export {
+  mangaCategory as mangaCategorySchema,
+  type MangaCategoryRow,
+  type MangaCategoryInsert,
+} from './mangaCategory';
+export {
+  mangaRepository as mangaRepositorySchema,
+  type MangaRepositoryRow,
+  type MangaRepositoryInsert,
+} from './mangaRepository';
 
 /**
  * Unified schema object containing all database tables
@@ -50,6 +70,10 @@ export const schema = {
   repository,
   voiceRepository,
   nameSubstitution,
+  manga,
+  mangaChapter,
+  mangaCategory,
+  mangaRepository,
 } as const;
 
 export type Schema = typeof schema;

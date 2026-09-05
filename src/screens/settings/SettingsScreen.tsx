@@ -93,6 +93,17 @@ const SettingsScreen = ({ navigation }: SettingsScreenProps) => {
           theme={theme}
         />
         <List.Item
+          title="Manga repositories"
+          description="Manga/manhua/manhwa plugin sources"
+          icon="image-multiple-outline"
+          onPress={() =>
+            navigation.navigate('SettingsStack', {
+              screen: 'MangaRepositorySettings',
+            })
+          }
+          theme={theme}
+        />
+        <List.Item
           title="Custom Code"
           icon="code-braces"
           onPress={() => navigation.navigate('CustomCode')}

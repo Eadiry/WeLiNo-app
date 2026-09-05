@@ -18,6 +18,7 @@ import CodeSnippetsScreen from '@screens/settings/SettingsCustomCodeScreen/CodeS
 import RespositorySettings from '@screens/settings/SettingsRepositoryScreen/SettingsRepositoryScreen';
 import VoiceRepositorySettings from '@screens/settings/SettingsVoiceRepositoryScreen/SettingsVoiceRepositoryScreen';
 import NameSubstitutionSettings from '@screens/settings/SettingsNameSubstitutionScreen/SettingsNameSubstitutionScreen';
+import MangaRepositorySettings from '@screens/settings/SettingsMangaRepositoryScreen/SettingsMangaRepositoryScreen';
 import LibrarySettings from '@screens/settings/SettingsLibraryScreen/SettingsLibraryScreen';
 import StatsScreen from '@screens/StatsScreen/StatsScreen';
 import GenreTaxonomyScreen from '@screens/settings/SettingsTaxonomyScreen/SettingsTaxonomyScreen';
@@ -68,6 +69,10 @@ const SettingsStack = () => {
       <Stack.Screen
         name="NameSubstitutionSettings"
         component={NameSubstitutionSettings}
+      />
+      <Stack.Screen
+        name="MangaRepositorySettings"
+        component={MangaRepositorySettings}
       />
       <Stack.Screen name="LibrarySettings" component={LibrarySettings} />
       <Stack.Screen name="CustomCode" component={SettingsCustomCode} />

@@ -85,6 +85,7 @@ export type SettingsStackParamList = {
   RespositorySettings: { url?: string } | undefined;
   VoiceRepositorySettings: { url?: string } | undefined;
   NameSubstitutionSettings: { novelId?: number } | undefined;
+  MangaRepositorySettings: { url?: string } | undefined;
   CustomCode: undefined;
   CodeSnippets: { snippetIndex: number; isJS: boolean } | undefined;
   GenreTaxonomy: undefined;
@@ -207,6 +208,11 @@ export type VoiceRepositorySettingsScreenProps = CompositeScreenProps<
 
 export type NameSubstitutionSettingsScreenProps = CompositeScreenProps<
   NativeStackScreenProps<SettingsStackParamList, 'NameSubstitutionSettings'>,
+  NativeStackScreenProps<RootStackParamList, 'BottomNavigator'>
+>;
+
+export type MangaRepositorySettingsScreenProps = CompositeScreenProps<
+  NativeStackScreenProps<SettingsStackParamList, 'MangaRepositorySettings'>,
   NativeStackScreenProps<RootStackParamList, 'BottomNavigator'>
 >;
 

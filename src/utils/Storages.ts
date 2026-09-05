@@ -9,3 +9,7 @@ export const PLUGIN_STORAGE = documentStorage + '/Plugins';
 export const NOVEL_STORAGE = ROOT_STORAGE + '/Novels';
 /** On-device TTS engine bundles (Kokoro model + voices), one dir per engine id. */
 export const TTS_STORAGE = documentStorage + '/TTS';
+/** Manga plugin bundles — separate from PLUGIN_STORAGE (different contract). */
+export const MANGA_PLUGIN_STORAGE = documentStorage + '/MangaPlugins';
+/** Downloaded manga chapter page images. */
+export const MANGA_STORAGE = ROOT_STORAGE + '/Manga';

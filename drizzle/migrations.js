@@ -7,6 +7,7 @@ import m0003 from './20260727081855_calm_chimera/migration.sql';
 import m0004 from './20260811071655_parched_human_torch/migration.sql';
 import m0005 from './20260901120000_add_voice_repository/migration.sql';
 import m0006 from './20260903000000_add_name_substitution/migration.sql';
+import m0007 from './20260904000000_add_manga/migration.sql';
 
 export default {
   migrations: {
@@ -17,5 +18,6 @@ export default {
     '20260811071655_parched_human_torch': m0004,
     '20260901120000_add_voice_repository': m0005,
     '20260903000000_add_name_substitution': m0006,
+    '20260904000000_add_manga': m0007,
   },
 };

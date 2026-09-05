@@ -7,15 +7,16 @@ import reverse from 'lodash-es/reverse';
 import uniqBy from 'lodash-es/uniqBy';
 import { encode, decode } from 'urlencode';
 
-import { getEnabledRepositoriesFromDb } from '@database/queries/RepositoryQueries';
+import { getEnabledMangaRepositoriesFromDb } from '@database/queries/MangaRepositoryQueries';
 import { newer } from '@utils/compareVersion';
 import NativeFile from '@modules/native-file';
 import { showToast } from '@utils/showToast';
-import { LEGACY_PLUGIN_STORAGE, PLUGIN_STORAGE } from '@utils/Storages';
+import { MANGA_PLUGIN_STORAGE } from '@utils/Storages';
 import { getMMKVObject, setMMKVObject } from '@utils/mmkv/mmkv';
 
 import { store } from './helpers/storage';
-import { NovelStatus, Plugin, PluginItem } from './types';
+import { MangaStatus, type MangaPlugin } from './types/manga';
+import type { PluginItem } from './types';
 import { defaultCover } from './helpers/constants';
 import { downloadFile, fetchApi, fetchProto, fetchText } from './helpers/fetch';
 import { FilterTypes } from './types/filterTypes';
@@ -25,12 +26,20 @@ import {
   createSandbox,
 } from './helpers/createSandbox';
 
+/**
+ * Manga's own plugin manager — parallel to `pluginManager.ts`, not sharing
+ * its installed-plugin registry (a manga plugin and a novel plugin can
+ * legitimately share an `id` without colliding, since they're never mixed
+ * into the same list). Only the sandbox execution model and low-level
+ * network/file helpers are shared; see `helpers/createSandbox.ts`.
+ */
+
 const packages: Record<string, any> = {
   'htmlparser2': { Parser },
   'cheerio': { load },
   'dayjs': dayjs,
   'urlencode': { encode, decode },
-  '@libs/novelStatus': { NovelStatus },
+  '@libs/mangaStatus': { MangaStatus },
   '@libs/fetch': { fetchApi, fetchText, fetchProto },
   '@libs/isAbsoluteUrl': { isUrlAbsolute },
   '@libs/filterInputs': { FilterTypes },
@@ -39,7 +48,7 @@ const packages: Record<string, any> = {
   '@libs/utils': { utf8ToBytes, bytesToUtf8 },
 };
 
-const initFromSandbox = createSandbox<Plugin>(packages);
+const initFromSandbox = createSandbox<MangaPlugin>(packages);
 
 const initPlugin = (pluginId: string, rawCode: string) => {
   const plugin = initFromSandbox(pluginId, rawCode);
@@ -50,45 +59,12 @@ const initPlugin = (pluginId: string, rawCode: string) => {
   return plugin;
 };
 
-const plugins: Record<string, Plugin | undefined> = {};
-export const INSTALLED_PLUGINS_KEY = 'INSTALL_PLUGINS';
-const PLUGIN_FILES = ['custom.js', 'custom.css', 'index.js'] as const;
+const plugins: Record<string, MangaPlugin | undefined> = {};
+export const INSTALLED_MANGA_PLUGINS_KEY = 'INSTALL_MANGA_PLUGINS';
 
-// v2.1.0 stored plugin bundles in getExternalFilesDir(), which can be unavailable
-// on some Android devices and leave installed plugin metadata without its bundle.
-// Copy legacy bundles into reliable internal storage, retaining the originals so
-// an interrupted migration can be retried safely on the next launch.
-const migrateLegacyPluginFiles = async (pluginId: string) => {
-  if (LEGACY_PLUGIN_STORAGE === PLUGIN_STORAGE) {
-    return;
-  }
-
-  const legacyIndexPath = `${LEGACY_PLUGIN_STORAGE}/${pluginId}/index.js`;
-  const pluginIndexPath = `${PLUGIN_STORAGE}/${pluginId}/index.js`;
-  if (
-    (await NativeFile.exists(pluginIndexPath)) ||
-    !(await NativeFile.exists(legacyIndexPath))
-  ) {
-    return;
-  }
-
-  const pluginDir = `${PLUGIN_STORAGE}/${pluginId}`;
-  await NativeFile.mkdir(pluginDir);
-  for (const filename of PLUGIN_FILES) {
-    const legacyPath = `${LEGACY_PLUGIN_STORAGE}/${pluginId}/${filename}`;
-    if (await NativeFile.exists(legacyPath)) {
-      const destinationPath = `${pluginDir}/${filename}`;
-      await NativeFile.writeFile(
-        destinationPath,
-        await NativeFile.readFile(legacyPath),
-      );
-    }
-  }
-};
-
-const installPlugin = async (
+const installMangaPlugin = async (
   _plugin: PluginItem,
-): Promise<Plugin | undefined> => {
+): Promise<MangaPlugin | undefined> => {
   const rawCode = await fetch(_plugin.url, {
     headers: { 'pragma': 'no-cache', 'cache-control': 'no-cache' },
   }).then(res => res.text());
@@ -98,8 +74,7 @@ const installPlugin = async (
   }
   let currentPlugin = plugins[plugin.id];
   if (!currentPlugin || newer(plugin.version, currentPlugin.version)) {
-    // save plugin code;
-    const pluginDir = `${PLUGIN_STORAGE}/${plugin.id}`;
+    const pluginDir = `${MANGA_PLUGIN_STORAGE}/${plugin.id}`;
     await NativeFile.mkdir(pluginDir);
     const pluginPath = pluginDir + '/index.js';
     const customJSPath = pluginDir + '/custom.js';
@@ -121,26 +96,26 @@ const installPlugin = async (
   return currentPlugin;
 };
 
-const uninstallPlugin = async (_plugin: PluginItem) => {
+const uninstallMangaPlugin = async (_plugin: PluginItem) => {
   plugins[_plugin.id] = undefined;
   store.getAllKeys().forEach(key => {
     if (key.startsWith(_plugin.id)) {
       store.remove(key);
     }
   });
-  const pluginFilePath = `${PLUGIN_STORAGE}/${_plugin.id}/index.js`;
+  const pluginFilePath = `${MANGA_PLUGIN_STORAGE}/${_plugin.id}/index.js`;
   if (await NativeFile.exists(pluginFilePath)) {
     await NativeFile.unlink(pluginFilePath);
   }
 };
 
-const updatePlugin = async (plugin: PluginItem) => {
-  return installPlugin(plugin);
+const updateMangaPlugin = async (plugin: PluginItem) => {
+  return installMangaPlugin(plugin);
 };
 
-const fetchPlugins = async (): Promise<PluginItem[]> => {
+const fetchMangaPlugins = async (): Promise<PluginItem[]> => {
   const allPlugins: PluginItem[] = [];
-  const allRepositories = await getEnabledRepositoriesFromDb();
+  const allRepositories = await getEnabledMangaRepositoriesFromDb();
 
   const repoPluginsRes = await Promise.allSettled(
     allRepositories.map(({ url }) => fetch(url).then(res => res.json())),
@@ -157,23 +132,14 @@ const fetchPlugins = async (): Promise<PluginItem[]> => {
   return uniqBy(reverse(allPlugins), 'id');
 };
 
-const getPlugin = (pluginId: string) => {
-  if (pluginId === LOCAL_PLUGIN_ID) {
-    return undefined;
-  }
+const getMangaPlugin = (pluginId: string) => plugins[pluginId];
 
-  return plugins[pluginId];
-};
-
-const loadPlugin = async (pluginId: string) => {
-  if (pluginId === LOCAL_PLUGIN_ID) {
-    return undefined;
-  }
+const loadMangaPlugin = async (pluginId: string) => {
   if (plugins[pluginId]) {
     return plugins[pluginId];
   }
 
-  const filePath = `${PLUGIN_STORAGE}/${pluginId}/index.js`;
+  const filePath = `${MANGA_PLUGIN_STORAGE}/${pluginId}/index.js`;
   try {
     const code = await NativeFile.readFile(filePath);
     const plugin = initPlugin(pluginId, code);
@@ -184,28 +150,22 @@ const loadPlugin = async (pluginId: string) => {
   }
 };
 
-const initializeInstalledPlugins = async () => {
+const initializeInstalledMangaPlugins = async () => {
   const installedPlugins =
-    getMMKVObject<PluginItem[]>(INSTALLED_PLUGINS_KEY) || [];
+    getMMKVObject<PluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
   await Promise.allSettled(
     installedPlugins.map(async plugin => {
-      try {
-        await migrateLegacyPluginFiles(plugin.id);
-      } catch {
-        // A failed migration can still be recovered from the repository below.
-      }
-
-      const installedPlugin = await loadPlugin(plugin.id);
+      const installedPlugin = await loadMangaPlugin(plugin.id);
       if (!installedPlugin) {
-        await installPlugin(plugin);
+        await installMangaPlugin(plugin);
       }
     }),
   );
 };
 
-const reloadInstalledPlugins = async (): Promise<string[]> => {
+const reloadInstalledMangaPlugins = async (): Promise<string[]> => {
   const installedPlugins =
-    getMMKVObject<PluginItem[]>(INSTALLED_PLUGINS_KEY) || [];
+    getMMKVObject<PluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
 
   Object.keys(plugins).forEach(pluginId => {
     plugins[pluginId] = undefined;
@@ -214,30 +174,27 @@ const reloadInstalledPlugins = async (): Promise<string[]> => {
   const results = await Promise.all(
     installedPlugins.map(async plugin => ({
       plugin,
-      source: await loadPlugin(plugin.id),
+      source: await loadMangaPlugin(plugin.id),
     })),
   );
   const restoredPlugins = results
     .filter(result => result.source)
     .map(result => result.plugin);
 
-  setMMKVObject(INSTALLED_PLUGINS_KEY, restoredPlugins);
+  setMMKVObject(INSTALLED_MANGA_PLUGINS_KEY, restoredPlugins);
 
   return results
     .filter(result => !result.source)
     .map(result => result.plugin.id);
 };
 
-const LOCAL_PLUGIN_ID = 'local';
-
 export {
-  getPlugin,
-  loadPlugin,
-  initializeInstalledPlugins,
-  reloadInstalledPlugins,
-  installPlugin,
-  uninstallPlugin,
-  updatePlugin,
-  fetchPlugins,
-  LOCAL_PLUGIN_ID,
+  getMangaPlugin,
+  loadMangaPlugin,
+  initializeInstalledMangaPlugins,
+  reloadInstalledMangaPlugins,
+  installMangaPlugin,
+  uninstallMangaPlugin,
+  updateMangaPlugin,
+  fetchMangaPlugins,
 };
