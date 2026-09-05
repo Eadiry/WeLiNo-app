@@ -35,6 +35,7 @@ import WebviewScreen from '@screens/WebviewScreen/WebviewScreen';
 import MangaBrowseScreen from '../screens/mangaBrowse/MangaBrowseScreen';
 import MangaSourceScreen from '../screens/mangaBrowse/MangaSourceScreen';
 import MangaScreen from '../screens/manga/MangaScreen';
+import MangaChapterScreen from '../screens/manga-reader/MangaChapterScreen';
 import { RootStackParamList } from './types';
 import { useMMKVBoolean } from 'react-native-mmkv';
 import OnboardingScreen from '@screens/onboarding/OnboardingScreen';
@@ -175,6 +176,11 @@ const MainNavigator = () => {
               component={MangaSourceScreen}
             />
             <Stack.Screen name="MangaScreen" component={MangaScreen} />
+            <Stack.Screen
+              name="MangaChapterScreen"
+              component={MangaChapterScreen}
+              options={{ fullScreenGestureEnabled: false }}
+            />
           </Stack.Navigator>
         </UpdateContextProvider>
       </LibraryContextProvider>

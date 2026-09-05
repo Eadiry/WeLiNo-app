@@ -27,6 +27,9 @@ import type { MangaScreenProps } from '@navigators/types';
 /** Whichever shape the manga is currently known in — a saved DB row, or the not-yet-added source response. */
 type DisplayChapter = MangaChapterRow | (MangaChapterItem & { id: string });
 
+const isSavedChapter = (chapter: DisplayChapter): chapter is MangaChapterRow =>
+  typeof chapter.id === 'number';
+
 /**
  * Manga's `NovelScreen.tsx`/`NovelContext.tsx` mirror — deliberately a plain
  * `useState`/`useEffect` screen rather than the novel reader's Zustand store
@@ -109,11 +112,22 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
     [dbManga],
   );
 
-  const openChapter = useCallback(() => {
-    // The reader (both paged and vertical modes) is Phase 3 — this screen's
-    // job is proving series metadata + chapter list works end to end first.
-    showToast("The manga reader isn't built yet — coming in a later update.");
-  }, []);
+  const openChapter = useCallback(
+    (chapter: DisplayChapter) => {
+      // A not-yet-added manga's chapters are transient (`MangaChapterItem`,
+      // string ids) — there's no `MangaChapter` row to track read state or
+      // paged/scroll progress against, so reading requires adding first.
+      if (!dbManga || !isSavedChapter(chapter)) {
+        showToast('Add this manga to your library to read it.');
+        return;
+      }
+      navigation.navigate('MangaChapterScreen', {
+        manga: dbManga,
+        chapter,
+      });
+    },
+    [dbManga, navigation],
+  );
 
   if (isLoading) {
     return (
@@ -211,7 +225,7 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
         {chapters.map(chapter => (
           <Text
             key={String(chapter.id)}
-            onPress={openChapter}
+            onPress={() => openChapter(chapter)}
             style={[styles.chapterRow, { color: theme.onSurface }]}
           >
             {chapter.name}

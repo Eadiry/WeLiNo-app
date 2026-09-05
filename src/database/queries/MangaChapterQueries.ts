@@ -1,4 +1,4 @@
-import { eq, asc, sql } from 'drizzle-orm';
+import { eq, and, gt, lt, asc, desc, sql } from 'drizzle-orm';
 
 import { dbManager } from '@database/db';
 import { mangaChapterSchema, type MangaChapterRow } from '@database/schema';
@@ -73,4 +73,82 @@ export const getMangaChaptersFromDb = async (
     .where(eq(mangaChapterSchema.mangaId, mangaId))
     .orderBy(asc(mangaChapterSchema.position))
     .all();
+};
+
+/**
+ * `ChapterQueries.ts`'s `getNextChapter`/`getPrevChapter`, mirrored without
+ * the scanlator-exclusion filter (no equivalent setting exists for manga
+ * yet) — position order is enough while every source only ever produces one
+ * chapter list per manga.
+ */
+export const getNextMangaChapter = async (
+  mangaId: number,
+  position: number | null,
+): Promise<MangaChapterRow | undefined> => {
+  return dbManager
+    .select()
+    .from(mangaChapterSchema)
+    .where(
+      and(
+        eq(mangaChapterSchema.mangaId, mangaId),
+        gt(mangaChapterSchema.position, position ?? -1),
+      ),
+    )
+    .orderBy(asc(mangaChapterSchema.position))
+    .get();
+};
+
+export const getPrevMangaChapter = async (
+  mangaId: number,
+  position: number | null,
+): Promise<MangaChapterRow | undefined> => {
+  return dbManager
+    .select()
+    .from(mangaChapterSchema)
+    .where(
+      and(
+        eq(mangaChapterSchema.mangaId, mangaId),
+        lt(mangaChapterSchema.position, position ?? Number.MAX_SAFE_INTEGER),
+      ),
+    )
+    .orderBy(desc(mangaChapterSchema.position))
+    .get();
+};
+
+export const markMangaChapterRead = async (chapterId: number) => {
+  await dbManager.write(async tx => {
+    tx.update(mangaChapterSchema)
+      .set({
+        unread: false,
+        readTime: sql`strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
+      })
+      .where(eq(mangaChapterSchema.id, chapterId))
+      .run();
+  });
+};
+
+/** Paged-mode progress ("which page") — see `mangaChapter.ts`'s field comment for why this is separate from `progress` (the vertical reader's scroll-%). */
+export const updateMangaChapterLastPageRead = async (
+  chapterId: number,
+  lastPageRead: number,
+) => {
+  await dbManager.write(async tx => {
+    tx.update(mangaChapterSchema)
+      .set({ lastPageRead })
+      .where(eq(mangaChapterSchema.id, chapterId))
+      .run();
+  });
+};
+
+/** Vertical-mode progress — a 0-100 scroll percentage, same meaning as the novel reader's `progress` field. */
+export const updateMangaChapterProgress = async (
+  chapterId: number,
+  progress: number,
+) => {
+  await dbManager.write(async tx => {
+    tx.update(mangaChapterSchema)
+      .set({ progress })
+      .where(eq(mangaChapterSchema.id, chapterId))
+      .run();
+  });
 };

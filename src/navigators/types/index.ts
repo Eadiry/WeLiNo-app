@@ -1,5 +1,5 @@
 import { ChapterInfo, NovelInfo } from '@database/types';
-import type { MangaRow } from '@database/schema';
+import type { MangaChapterRow, MangaRow } from '@database/schema';
 import {
   CompositeScreenProps,
   NavigatorScreenParams,
@@ -36,6 +36,7 @@ export type RootStackParamList = {
   MangaScreen:
     | MangaRow
     | { path: string; pluginId: string; name: string; cover?: string | null };
+  MangaChapterScreen: { manga: MangaRow; chapter: MangaChapterRow };
 };
 
 export type BottomNavigatorParamList = {
@@ -65,6 +66,11 @@ export type MangaSourceScreenProps = NativeStackScreenProps<
 export type MangaScreenProps = NativeStackScreenProps<
   RootStackParamList,
   'MangaScreen'
+>;
+
+export type MangaChapterScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  'MangaChapterScreen'
 >;
 
 export type LibraryScreenProps = CompositeScreenProps<
