@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, ListRenderItemInfo, StyleSheet, View } from 'react-native';
 import {
   Button,
@@ -34,10 +34,17 @@ import {
   isMangaRepoUrlDuplicated,
   setMangaRepositoryEnabled,
 } from '@database/queries/MangaRepositoryQueries';
-import { fetchMangaPlugins } from '@plugins/mangaPluginManager';
+import {
+  fetchMangaPlugins,
+  installTemplateMangaPlugin,
+} from '@plugins/mangaPluginManager';
+import { detectSiteTemplate } from '@plugins/templates';
+import { KNOWN_PAPERBACK_REPOSITORIES } from '@plugins/knownPaperbackRepositories';
 import type { MangaRepositorySettingsScreenProps } from '@navigators/types';
 
 const REPO_URL_RE = /^https?:\/\/.+/i;
+type AddMode = 'repository' | 'site';
+const EMPTY_REPOSITORIES: MangaRepositoryRow[] = [];
 
 /**
  * Manga's own "Repositories" screen — mirrors
@@ -56,7 +63,7 @@ const SettingsMangaRepositoryScreen = ({
   const repositories =
     useLiveQuery(dbManager.select().from(mangaRepositorySchema), [
       { table: 'MangaRepository' },
-    ]) ?? [];
+    ]) ?? EMPTY_REPOSITORIES;
 
   const {
     value: addVisible,
@@ -66,6 +73,18 @@ const SettingsMangaRepositoryScreen = ({
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState<MangaRepositoryRow['format']>('native');
   const [sourceCount, setSourceCount] = useState<number | null>(null);
+  const [addMode, setAddMode] = useState<AddMode>('repository');
+  const [siteUrl, setSiteUrl] = useState('');
+  const {
+    value: detecting,
+    setTrue: startDetecting,
+    setFalse: stopDetecting,
+  } = useBoolean();
+
+  const suggestedRepositories = useMemo(() => {
+    const addedUrls = new Set(repositories.map(r => r.url));
+    return KNOWN_PAPERBACK_REPOSITORIES.filter(r => !addedUrls.has(r.url));
+  }, [repositories]);
 
   const refreshSourceCount = useCallback(async () => {
     const plugins = await fetchMangaPlugins();
@@ -94,6 +113,55 @@ const SettingsMangaRepositoryScreen = ({
       refreshSourceCount();
     },
     [hideAdd, refreshSourceCount],
+  );
+
+  const addSuggestedRepository = useCallback(
+    (repoUrl: string) => addRepository(repoUrl, 'paperback'),
+    [addRepository],
+  );
+
+  /**
+   * "Single site" mode: no repository, no bundle — fetches the pasted URL
+   * once, checks it against known CMS/theme fingerprints (`@plugins/templates`,
+   * Madara today), and installs a generated plugin directly on a match.
+   * There's no universal fallback by design: a non-match means auto-detection
+   * genuinely doesn't recognize this site's software, not a bug to retry.
+   */
+  const addSingleSite = useCallback(
+    async (siteUrlInput: string) => {
+      const trimmed = siteUrlInput.trim();
+      if (!REPO_URL_RE.test(trimmed)) {
+        showToast('Enter a valid site URL');
+        return;
+      }
+      startDetecting();
+      try {
+        const match = await detectSiteTemplate(trimmed);
+        if (!match) {
+          showToast(
+            "Couldn't recognize this site's software — it may need a Paperback repository, or a hand-written plugin.",
+          );
+          return;
+        }
+        const plugin = installTemplateMangaPlugin(
+          match.template.id,
+          match.config,
+        );
+        if (!plugin) {
+          showToast('Something went wrong installing this source.');
+          return;
+        }
+        showToast(`Added ${plugin.name} (${match.template.name})`);
+        setSiteUrl('');
+        hideAdd();
+        refreshSourceCount();
+      } catch {
+        showToast("Couldn't reach that site — check the URL and try again.");
+      } finally {
+        stopDetecting();
+      }
+    },
+    [hideAdd, refreshSourceCount, startDetecting, stopDetecting],
   );
 
   useEffect(() => {
@@ -150,13 +218,49 @@ const SettingsMangaRepositoryScreen = ({
         renderItem={renderRepository}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
-          sourceCount != null && repositories.length > 0 ? (
-            <Text
-              style={[styles.sourceCount, { color: theme.onSurfaceVariant }]}
-            >
-              {sourceCount} manga source{sourceCount === 1 ? '' : 's'} available
-            </Text>
-          ) : null
+          <View>
+            {sourceCount != null && repositories.length > 0 ? (
+              <Text
+                style={[styles.sourceCount, { color: theme.onSurfaceVariant }]}
+              >
+                {sourceCount} manga source{sourceCount === 1 ? '' : 's'}{' '}
+                available
+              </Text>
+            ) : null}
+            {suggestedRepositories.length > 0 ? (
+              <View style={styles.suggestedSection}>
+                <Text
+                  style={[
+                    styles.suggestedHeading,
+                    { color: theme.onSurfaceVariant },
+                  ]}
+                >
+                  Suggested repositories
+                </Text>
+                {suggestedRepositories.map(suggestion => (
+                  <View
+                    key={suggestion.url}
+                    style={[
+                      styles.repoRow,
+                      { backgroundColor: theme.surfaceVariant },
+                    ]}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.repoUrl, { color: theme.onSurface }]}
+                    >
+                      {suggestion.name}
+                    </Text>
+                    <Button
+                      onPress={() => addSuggestedRepository(suggestion.url)}
+                    >
+                      Add
+                    </Button>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
         }
         ListEmptyComponent={
           <EmptyView
@@ -177,46 +281,102 @@ const SettingsMangaRepositoryScreen = ({
       />
 
       <Portal>
-        <Dialog visible={addVisible} onDismiss={hideAdd}>
-          <Dialog.Title>Add manga repository</Dialog.Title>
+        <Dialog
+          visible={addVisible}
+          onDismiss={() => {
+            hideAdd();
+            setAddMode('repository');
+            setSiteUrl('');
+          }}
+        >
+          <Dialog.Title>Add manga source</Dialog.Title>
           <Dialog.Content>
-            <TextInput
-              autoFocus
-              mode="outlined"
-              placeholder="https://…/index.json"
-              value={url}
-              onChangeText={text => {
-                setUrl(text);
-                // Best-effort default: Paperback/Inkdex catalogs are always
-                // published as a `versioning.json` registry.
-                setFormat(
-                  text.trim().endsWith('versioning.json')
-                    ? 'paperback'
-                    : 'native',
-                );
-              }}
-            />
-            <View style={styles.formatGap} />
-            <SegmentedControl<'native' | 'paperback'>
+            <SegmentedControl<AddMode>
               options={[
-                { value: 'native', label: 'LNReader-style' },
-                { value: 'paperback', label: 'Paperback/Inkdex' },
+                { value: 'repository', label: 'Repository' },
+                { value: 'site', label: 'Single site' },
               ]}
-              value={format}
-              onChange={setFormat}
+              value={addMode}
+              onChange={setAddMode}
               theme={theme}
             />
-            <Text
-              style={[styles.formatHint, { color: theme.onSurfaceVariant }]}
-            >
-              {format === 'paperback'
-                ? 'A compiled Paperback/Inkdex extension catalog (a versioning.json URL).'
-                : "This app's own plugin format — a JSON list of sources."}
-            </Text>
+            <View style={styles.formatGap} />
+            {addMode === 'repository' ? (
+              <>
+                <TextInput
+                  autoFocus
+                  mode="outlined"
+                  placeholder="https://…/index.json"
+                  value={url}
+                  onChangeText={text => {
+                    setUrl(text);
+                    // Best-effort default: Paperback/Inkdex catalogs are
+                    // always published as a `versioning.json` registry.
+                    setFormat(
+                      text.trim().endsWith('versioning.json')
+                        ? 'paperback'
+                        : 'native',
+                    );
+                  }}
+                />
+                <View style={styles.formatGap} />
+                <SegmentedControl<'native' | 'paperback'>
+                  options={[
+                    { value: 'native', label: 'LNReader-style' },
+                    { value: 'paperback', label: 'Paperback/Inkdex' },
+                  ]}
+                  value={format}
+                  onChange={setFormat}
+                  theme={theme}
+                />
+                <Text
+                  style={[styles.formatHint, { color: theme.onSurfaceVariant }]}
+                >
+                  {format === 'paperback'
+                    ? 'A compiled Paperback/Inkdex extension catalog (a versioning.json URL).'
+                    : "This app's own plugin format — a JSON list of sources."}
+                </Text>
+              </>
+            ) : (
+              <>
+                <TextInput
+                  autoFocus
+                  mode="outlined"
+                  placeholder="https://example.com"
+                  value={siteUrl}
+                  onChangeText={setSiteUrl}
+                  disabled={detecting}
+                />
+                <Text
+                  style={[styles.formatHint, { color: theme.onSurfaceVariant }]}
+                >
+                  {detecting
+                    ? 'Checking this site…'
+                    : "Paste a manga site's URL — if it's built on a CMS we recognize (Madara, so far), a source is generated automatically. No universal support: an unrecognized site needs a repository or a hand-written plugin instead."}
+                </Text>
+              </>
+            )}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={hideAdd}>Cancel</Button>
-            <Button onPress={() => addRepository(url, format)}>Add</Button>
+            <Button
+              onPress={() => {
+                hideAdd();
+                setAddMode('repository');
+                setSiteUrl('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={detecting}
+              onPress={() =>
+                addMode === 'repository'
+                  ? addRepository(url, format)
+                  : addSingleSite(siteUrl)
+              }
+            >
+              Add
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -242,4 +402,6 @@ const styles = StyleSheet.create({
   fab: { margin: 16, position: 'absolute', right: 0 },
   formatGap: { height: 12 },
   formatHint: { fontSize: 12, marginTop: 8 },
+  suggestedSection: { marginBottom: 16 },
+  suggestedHeading: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
 });

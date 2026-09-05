@@ -29,6 +29,7 @@ import {
   fetchPaperbackRepositoryPlugins,
   loadPaperbackPlugin,
 } from './paperbackAdapter';
+import { templates, type TemplateConfig } from './templates';
 
 /**
  * Manga's own plugin manager — parallel to `pluginManager.ts`, not sharing
@@ -37,11 +38,17 @@ import {
  * into the same list). Only the sandbox execution model and low-level
  * network/file helpers are shared; see `helpers/createSandbox.ts`.
  *
- * Two plugin *formats* live side by side, tagged per `MangaRepository.format`
- * and carried through as `MangaPluginItem.format` so a cold-started app can
- * tell which loader an already-installed plugin needs without re-fetching
- * its repository: `native` (our own sandbox, `helpers/createSandbox.ts`) and
- * `paperback` (a compiled Paperback/Inkdex bundle, `paperbackAdapter.ts`).
+ * Two repository-sourced plugin *formats* live side by side, tagged per
+ * `MangaRepository.format` and carried through as `MangaPluginItem.format`
+ * so a cold-started app can tell which loader an already-installed plugin
+ * needs without re-fetching its repository: `native` (our own sandbox,
+ * `helpers/createSandbox.ts`) and `paperback` (a compiled Paperback/Inkdex
+ * bundle, `paperbackAdapter.ts`).
+ *
+ * A third kind, *template* plugins (`./templates/`), isn't repository-sourced
+ * at all — there's no bundle to download, just a small `{ templateId, config }`
+ * pair the matching template's `create()` turns back into a `MangaPlugin` on
+ * demand. See `installTemplateMangaPlugin` below.
  */
 
 export interface MangaPluginItem extends PluginItem {
@@ -130,6 +137,66 @@ const uninstallMangaPlugin = async (_plugin: PluginItem) => {
   }
 };
 
+interface InstalledTemplatePlugin {
+  id: string;
+  templateId: string;
+  config: TemplateConfig;
+}
+
+export const INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY =
+  'INSTALL_MANGA_TEMPLATE_PLUGINS';
+
+/** Registers an already-built `MangaPlugin` directly — the one hook template plugins (and nothing else) need into the shared in-memory registry. */
+const registerMangaPlugin = (plugin: MangaPlugin) => {
+  plugins[plugin.id] = plugin;
+};
+
+const createFromTemplate = (
+  templateId: string,
+  config: TemplateConfig,
+): MangaPlugin | undefined => {
+  const template = templates.find(t => t.id === templateId);
+  if (!template) {
+    return undefined;
+  }
+  const plugin = template.create(config);
+  applyDefaultImageHeaders(plugin);
+  return plugin;
+};
+
+/** Installs a CMS-template-generated plugin (see `./templates/`) — no bundle to download, just persists `{ id, templateId, config }` and reconstructs on reload. */
+const installTemplateMangaPlugin = (
+  templateId: string,
+  config: TemplateConfig,
+): MangaPlugin | undefined => {
+  const plugin = createFromTemplate(templateId, config);
+  if (!plugin) {
+    return undefined;
+  }
+  registerMangaPlugin(plugin);
+  const installed =
+    getMMKVObject<InstalledTemplatePlugin[]>(
+      INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY,
+    ) || [];
+  setMMKVObject(INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY, [
+    ...installed.filter(p => p.id !== plugin.id),
+    { id: plugin.id, templateId, config },
+  ]);
+  return plugin;
+};
+
+const uninstallTemplateMangaPlugin = (id: string) => {
+  plugins[id] = undefined;
+  const installed =
+    getMMKVObject<InstalledTemplatePlugin[]>(
+      INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY,
+    ) || [];
+  setMMKVObject(
+    INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY,
+    installed.filter(p => p.id !== id),
+  );
+};
+
 const updateMangaPlugin = async (plugin: MangaPluginItem) => {
   return installMangaPlugin(plugin);
 };
@@ -180,6 +247,19 @@ const loadMangaPlugin = async (
   }
 };
 
+const initializeInstalledTemplateMangaPlugins = () => {
+  const installedTemplatePlugins =
+    getMMKVObject<InstalledTemplatePlugin[]>(
+      INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY,
+    ) || [];
+  installedTemplatePlugins.forEach(({ templateId, config }) => {
+    const plugin = createFromTemplate(templateId, config);
+    if (plugin) {
+      registerMangaPlugin(plugin);
+    }
+  });
+};
+
 const initializeInstalledMangaPlugins = async () => {
   const installedPlugins =
     getMMKVObject<MangaPluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
@@ -191,6 +271,7 @@ const initializeInstalledMangaPlugins = async () => {
       }
     }),
   );
+  initializeInstalledTemplateMangaPlugins();
 };
 
 const reloadInstalledMangaPlugins = async (): Promise<string[]> => {
@@ -213,6 +294,8 @@ const reloadInstalledMangaPlugins = async (): Promise<string[]> => {
 
   setMMKVObject(INSTALLED_MANGA_PLUGINS_KEY, restoredPlugins);
 
+  initializeInstalledTemplateMangaPlugins();
+
   return results
     .filter(result => !result.source)
     .map(result => result.plugin.id);
@@ -227,4 +310,7 @@ export {
   uninstallMangaPlugin,
   updateMangaPlugin,
   fetchMangaPlugins,
+  registerMangaPlugin,
+  installTemplateMangaPlugin,
+  uninstallTemplateMangaPlugin,
 };

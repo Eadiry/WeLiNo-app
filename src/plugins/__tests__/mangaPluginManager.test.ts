@@ -6,7 +6,9 @@ import {
   getMangaPlugin,
   initializeInstalledMangaPlugins,
   installMangaPlugin,
+  installTemplateMangaPlugin,
   INSTALLED_MANGA_PLUGINS_KEY,
+  INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY,
   reloadInstalledMangaPlugins,
 } from '../mangaPluginManager';
 import type { PluginItem } from '../types';
@@ -128,6 +130,50 @@ describe('initializeInstalledMangaPlugins', () => {
       pluginCode('missing'),
     );
     expect(getMangaPlugin('missing')).toMatchObject({ id: 'missing' });
+  });
+});
+
+describe('installTemplateMangaPlugin', () => {
+  it('registers a CMS-template plugin and persists it for reload, with no bundle to download', async () => {
+    const config = {
+      id: 'example.com',
+      name: 'example.com',
+      baseUrl: 'https://example.com',
+      lang: 'en',
+    };
+
+    const plugin = installTemplateMangaPlugin('madara', config);
+
+    expect(plugin).toMatchObject({ id: 'example.com' });
+    expect(getMangaPlugin('example.com')).toBe(plugin);
+    expect(setMMKVObject).toHaveBeenCalledWith(
+      INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY,
+      [{ id: 'example.com', templateId: 'madara', config }],
+    );
+
+    // Reload should reconstruct it from the persisted { templateId, config }
+    // pair rather than losing it.
+    jest.mocked(getMMKVObject).mockImplementation(key => {
+      if (key === INSTALLED_MANGA_TEMPLATE_PLUGINS_KEY) {
+        return [{ id: 'example.com', templateId: 'madara', config }] as never;
+      }
+      return undefined;
+    });
+
+    await reloadInstalledMangaPlugins();
+
+    expect(getMangaPlugin('example.com')).toMatchObject({ id: 'example.com' });
+  });
+
+  it('returns undefined for an unknown template id', () => {
+    expect(
+      installTemplateMangaPlugin('not-a-real-template', {
+        id: 'x',
+        name: 'x',
+        baseUrl: 'https://example.com',
+        lang: 'en',
+      }),
+    ).toBeUndefined();
   });
 });
 
