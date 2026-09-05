@@ -135,4 +135,6 @@ export interface LegacySource {
     query: SearchRequest,
     metadata: unknown,
   ) => Promise<PagedResults>;
+  /** Confirmed real usage (Netsky's community BatoTo): returns the genre/tag sections used to populate `SearchRequest.includedTags`. */
+  getSearchTags?: () => Promise<TagSection[]>;
 }

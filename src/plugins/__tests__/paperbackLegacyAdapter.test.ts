@@ -1,4 +1,5 @@
 import { loadPaperbackLegacySource } from '../paperbackLegacyAdapter';
+import { FilterTypes } from '../types/filterTypes';
 
 jest.mock('@hooks/persisted/useUserAgent', () => ({
   getUserAgent: () => 'WeLiNo test',
@@ -167,4 +168,60 @@ it('resolves unknown create* globals and requestManager.getDefaultUserAgent inst
   const manga = await plugin!.parseManga('m1');
   expect(manga.name).toBe('Test Manga');
   expect(manga.cover).toBe('https://example.com/cover.jpg');
+});
+
+// Confirmed real mechanism (Netsky's community BatoTo): getSearchTags()
+// returns tag/genre sections; getSearchResults reads includedTags from the
+// query, independent of `title`.
+const TAGGED_BUNDLE = `
+"use strict";
+var _Sources = (function(){
+  class TaggedExtension {
+    constructor(cheerio) { this.cheerio = cheerio; }
+    async getMangaDetails(mangaId) {
+      return { titles: ['M'], image: '', status: 1 };
+    }
+    async getChapters(mangaId) { return []; }
+    async getChapterDetails(mangaId, chapterId) { return { id: chapterId, mangaId, pages: [], longStrip: false }; }
+    async getSearchTags() {
+      return [{ id: 'genres', label: 'Genres', tags: [{ id: 'action', label: 'Action' }] }];
+    }
+    async getSearchResults(query) {
+      if (query.includedTags && query.includedTags.some(t => t.id === 'action')) {
+        return { results: [{ id: 'action-1', title: { text: 'Action Manga' }, image: '' }] };
+      }
+      return { results: [] };
+    }
+  }
+  return { TaggedExtension: TaggedExtension };
+})();
+this.Sources = _Sources;
+if (typeof exports === 'object' && typeof module !== 'undefined') { module.exports.Sources = this.Sources; }
+`;
+
+it('exposes getSearchTags as MangaPlugin.filters and threads selected tags into getSearchResults', async () => {
+  const plugin = loadPaperbackLegacySource('TaggedExtension', TAGGED_BUNDLE);
+  expect(plugin).toBeDefined();
+
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(plugin!.filters).toEqual({
+    tags: {
+      type: FilterTypes.ExcludableCheckboxGroup,
+      label: 'Genres',
+      options: [{ label: 'Genres: Action', value: 'action' }],
+      value: {},
+    },
+  });
+
+  const results = await plugin!.popularManga(1, {
+    filters: {
+      tags: {
+        type: FilterTypes.ExcludableCheckboxGroup,
+        value: { include: ['action'] },
+      },
+    },
+  });
+  expect(results).toEqual([
+    { id: undefined, name: 'Action Manga', path: 'action-1', cover: '' },
+  ]);
 });

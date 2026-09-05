@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   ListRenderItemInfo,
+  StyleSheet,
   useWindowDimensions,
 } from 'react-native';
-import { ActivityIndicator } from 'react-native-paper';
+import { ActivityIndicator, FAB } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 
 import {
   EmptyView,
@@ -13,11 +16,14 @@ import {
   SearchbarV2,
 } from '@components';
 import MangaCover from '@components/MangaCover';
+import FilterBottomSheet from '@screens/BrowseSourceScreen/components/FilterBottomSheet';
 import { useSearch } from '@hooks';
 import { useTheme } from '@hooks/persisted';
+import { getString } from '@i18n/translations';
 
 import { getMangaPlugin } from '@plugins/mangaPluginManager';
 import type { MangaSourceItem } from '@plugins/types/manga';
+import type { Filters, FilterToValues } from '@plugins/types/filterTypes';
 import {
   getMangaLibraryQuery,
   switchMangaToLibraryQuery,
@@ -30,11 +36,13 @@ const COVER_MARGIN = 4;
 
 /**
  * Manga's `BrowseSourceScreen.tsx` mirror — popular + search for one
- * installed plugin, trimmed for v1: no filters (Paperback's own filter
- * surface is minimal today, and the Madara template has none yet) and no
- * webview escape hatch. Pagination is simpler than `useBrowseSource.ts`'s
- * queued/generation-tracked version too — a manga catalog this size doesn't
- * need that hardening yet; revisit if a real source proves flaky.
+ * installed plugin, trimmed for v1: no webview escape hatch. Pagination is
+ * simpler than `useBrowseSource.ts`'s queued/generation-tracked version —
+ * a manga catalog this size doesn't need that hardening yet; revisit if a
+ * real source proves flaky. Filters reuse `FilterBottomSheet`/`Filters`
+ * verbatim from the novel side (already content-type-agnostic) rather than
+ * a forked copy — see `paperbackAdapter.ts`'s `getSearchTags`-based genre
+ * filter for where `plugin.filters` actually comes from.
  */
 const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
   const theme = useTheme();
@@ -49,13 +57,26 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
   const [error, setError] = useState<string>();
   const { searchText, setSearchText, clearSearchbar } = useSearch();
   const inFlightRef = useRef(false);
+  const filterSheetRef = useRef<BottomSheetModalMethods | null>(null);
+  const { bottom, right } = useSafeAreaInsets();
+
+  // `plugin.filters` is populated asynchronously (a real source's
+  // `getSearchTags()` is a network call — see `paperbackAdapter.ts`), so
+  // this can't just be read once at mount; refreshed from `plugin.filters`
+  // after every fetch below, same as the novel side's `useBrowseSource`.
+  const [filterValues, setFilterValues] = useState<Filters | undefined>(
+    plugin?.filters,
+  );
+  const [selectedFilters, setSelectedFilters] = useState<
+    FilterToValues<Filters> | undefined
+  >(filterValues);
 
   const library =
     useLiveQuery(getMangaLibraryQuery(), [{ table: 'Manga' }]) ?? [];
   const libraryPaths = new Set(library.map(m => m.path));
 
   const load = useCallback(
-    async (pageNo: number, term: string) => {
+    async (pageNo: number, term: string, filters?: FilterToValues<Filters>) => {
       if (!plugin || inFlightRef.current) return;
       inFlightRef.current = true;
       setIsLoading(true);
@@ -63,9 +84,10 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
       try {
         const res = term
           ? await plugin.searchManga(term, pageNo)
-          : await plugin.popularManga(pageNo);
+          : await plugin.popularManga(pageNo, { filters });
         setItems(prev => (pageNo === 1 ? res : [...prev, ...res]));
         setHasNextPage(res.length > 0);
+        setFilterValues(plugin.filters);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -80,7 +102,7 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
     setPage(1);
     setItems([]);
     setHasNextPage(true);
-    load(1, searchText.trim());
+    load(1, searchText.trim(), selectedFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchText]);
 
@@ -88,8 +110,27 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
     if (isLoading || !hasNextPage) return;
     const next = page + 1;
     setPage(next);
-    load(next, searchText.trim());
-  }, [isLoading, hasNextPage, page, load, searchText]);
+    load(next, searchText.trim(), selectedFilters);
+  }, [isLoading, hasNextPage, page, load, searchText, selectedFilters]);
+
+  const setFilters = useCallback(
+    (filters?: FilterToValues<Filters>) => {
+      setSelectedFilters(filters);
+      setPage(1);
+      setItems([]);
+      setHasNextPage(true);
+      load(1, searchText.trim(), filters);
+    },
+    [load, searchText],
+  );
+
+  // Matches the novel side's `useBrowseSource.clearFilters`: resets the
+  // selected-filters state without refetching — the sheet's own Reset
+  // button doesn't close/apply, only its separate "Filter" button does.
+  const clearFilters = useCallback(
+    (filters: Filters) => setSelectedFilters(filters),
+    [],
+  );
 
   const openManga = useCallback(
     (item: MangaSourceItem) =>
@@ -142,7 +183,7 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
             {
               iconName: 'refresh',
               title: 'Retry',
-              onPress: () => load(1, searchText.trim()),
+              onPress: () => load(1, searchText.trim(), selectedFilters),
             },
           ]}
         />
@@ -165,8 +206,42 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
           }
         />
       )}
+      {filterValues && !searchText ? (
+        <>
+          <FAB
+            icon="filter-variant"
+            style={[
+              styles.filterFab,
+              {
+                backgroundColor: theme.primary,
+                marginBottom: bottom + 16,
+                marginEnd: right + 16,
+              },
+            ]}
+            label={getString('common.filter')}
+            uppercase={false}
+            color={theme.onPrimary}
+            onPress={() => filterSheetRef?.current?.present()}
+          />
+          <FilterBottomSheet
+            filterSheetRef={filterSheetRef}
+            filters={filterValues}
+            setFilters={setFilters}
+            clearFilters={clearFilters}
+          />
+        </>
+      ) : null}
     </SafeAreaView>
   );
 };
 
 export default MangaSourceScreen;
+
+const styles = StyleSheet.create({
+  filterFab: {
+    bottom: 0,
+    margin: 16,
+    position: 'absolute',
+    right: 0,
+  },
+});

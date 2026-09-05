@@ -10,6 +10,11 @@ import {
   type LegacySource,
   type PagedResults,
 } from './types/paperbackLegacy';
+import { FilterTypes, isXCheckboxValue } from './types/filterTypes';
+
+/** Same fixed key `paperbackAdapter.ts` uses — there is only ever one
+ * genre/tag filter per source (`getSearchTags()` returns one flat list). */
+const GENRE_FILTER_KEY = 'tags';
 
 /**
  * Adapter for the two Paperback bundle generations that predate the current
@@ -144,12 +149,54 @@ function wrapLegacySource(pluginId: string, ext: LegacySource): MangaPlugin {
   const search = (
     title: string,
     pageNo: number,
+    includedTags?: string[],
+    excludedTags?: string[],
   ): Promise<PagedResults> | undefined => {
     const fn = ext.getSearchResults ?? ext.searchRequest;
-    return fn?.call(ext, { title }, pageNo > 1 ? { page: pageNo } : null);
+    return fn?.call(
+      ext,
+      {
+        title,
+        includedTags: includedTags?.map(id => ({ id })),
+        excludedTags: excludedTags?.map(id => ({ id })),
+      },
+      pageNo > 1 ? { page: pageNo } : null,
+    );
   };
 
-  return {
+  // eslint-disable-next-line prefer-const
+  let plugin: MangaPlugin;
+  // Confirmed real usage (Netsky's community BatoTo): `getSearchTags()`
+  // returns the genre/tag sections its own `getSearchResults` reads
+  // `includedTags` from. No `ready`/`initialise()` concept exists in this
+  // SDK generation to piggyback on (unlike the 0.9 adapter), so this is a
+  // fire-and-forget population, same mutate-in-place pattern.
+  Promise.resolve().then(async () => {
+    if (!ext.getSearchTags) return;
+    try {
+      const sections = await ext.getSearchTags();
+      const options = sections.flatMap(section =>
+        section.tags.map(tag => ({
+          label: `${section.label}: ${tag.label}`,
+          value: tag.id,
+        })),
+      );
+      if (options.length === 0) return;
+      plugin.filters = {
+        [GENRE_FILTER_KEY]: {
+          type: FilterTypes.ExcludableCheckboxGroup,
+          label: 'Genres',
+          options,
+          value: {},
+        },
+      };
+    } catch {
+      // Filters are a nice-to-have on top of a working plugin — a failure
+      // here must not affect browsing/reading.
+    }
+  });
+
+  plugin = {
     id: pluginId,
     name: pluginId,
     site: pluginId,
@@ -159,12 +206,22 @@ function wrapLegacySource(pluginId: string, ext: LegacySource): MangaPlugin {
     iconUrl: '',
     imageRequestInit: { headers: {} },
 
-    async popularManga(pageNo) {
+    async popularManga(pageNo, options) {
       // Same "approximate popular via a blank search" simplification the
       // 0.9 adapter uses — this SDK's actual home-page mechanism
       // (getHomePageSections) is a multi-section callback API our one flat
       // paged list doesn't map onto cleanly.
-      const results = await search('', pageNo);
+      const genreFilter = options?.filters?.[GENRE_FILTER_KEY];
+      const genreValue =
+        genreFilter && isXCheckboxValue(genreFilter)
+          ? genreFilter.value
+          : undefined;
+      const results = await search(
+        '',
+        pageNo,
+        genreValue?.include,
+        genreValue?.exclude,
+      );
       return (results?.results ?? []).map(item => ({
         id: undefined,
         name: item.title.text,
@@ -203,4 +260,5 @@ function wrapLegacySource(pluginId: string, ext: LegacySource): MangaPlugin {
       return { pages: details.pages };
     },
   };
+  return plugin;
 }

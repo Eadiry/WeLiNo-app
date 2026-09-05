@@ -2,6 +2,7 @@ import {
   fetchPaperbackRepositoryPlugins,
   loadPaperbackPlugin,
 } from '../paperbackAdapter';
+import { FilterTypes } from '../types/filterTypes';
 
 jest.mock('@hooks/persisted/useUserAgent', () => ({
   getUserAgent: () => 'WeLiNo test',
@@ -159,6 +160,66 @@ describe('loadPaperbackPlugin', () => {
         path: 'trending-1',
         cover: 'https://example.com/t.jpg',
       },
+    ]);
+  });
+
+  it('exposes getSearchTags as MangaPlugin.filters and threads selected tags into getSearchResults', async () => {
+    // Confirmed real mechanism (MangaDex): getSearchTags() returns
+    // tag/genre sections; getSearchResults reads includedTags/excludedTags
+    // from the query. NOT Application.registerSearchFilter, which no real
+    // downloaded bundle was ever found to call.
+    const bundle = `
+      var source = (function (e) {
+        class TaggedExtension {
+          async getMangaDetails(mangaId) {
+            return { mangaId, mangaInfo: { thumbnailUrl: '', synopsis: '', primaryTitle: mangaId } };
+          }
+          async getChapters(sourceManga) { return []; }
+          async getChapterDetails(chapter) { return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages: [] }; }
+          async getSearchTags() {
+            return [{ id: 'genres', title: 'Genres', tags: [{ id: 'action', title: 'Action' }, { id: 'romance', title: 'Romance' }] }];
+          }
+          async getSearchResults(query) {
+            if (query.includedTags?.some(t => t.id === 'action')) {
+              return { items: [{ mangaId: 'action-1', title: 'Action Manga', imageUrl: '' }] };
+            }
+            return { items: [] };
+          }
+        }
+        e.TaggedSource = new TaggedExtension();
+        return e;
+      })({});
+    `;
+
+    const plugin = loadPaperbackPlugin('TaggedSource', bundle);
+    expect(plugin).toBeDefined();
+
+    // plugin.filters is populated asynchronously (mutated in place after
+    // the `ready` chain resolves) — wait a microtask turn for it, same as
+    // the browse screen does by re-reading plugin.filters after a fetch.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(plugin!.filters).toEqual({
+      tags: {
+        type: FilterTypes.ExcludableCheckboxGroup,
+        label: 'Genres',
+        options: [
+          { label: 'Genres: Action', value: 'action' },
+          { label: 'Genres: Romance', value: 'romance' },
+        ],
+        value: {},
+      },
+    });
+
+    const results = await plugin!.popularManga(1, {
+      filters: {
+        tags: {
+          type: FilterTypes.ExcludableCheckboxGroup,
+          value: { include: ['action'] },
+        },
+      },
+    });
+    expect(results).toEqual([
+      { id: undefined, name: 'Action Manga', path: 'action-1', cover: '' },
     ]);
   });
 });

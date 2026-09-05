@@ -81,6 +81,16 @@ export interface PBPagedResults<T> {
 export interface PBSearchQuery {
   title: string;
   filters: { id: string; value: unknown }[];
+  /**
+   * The real genre/tag filtering mechanism — confirmed live in a real
+   * downloaded bundle (MangaDex): `includedTags`/`excludedTags` on the
+   * query, populated from whatever `getSearchTags()` returned. Not the
+   * `registerSearchFilter`/`registeredSearchFilters` API on `PBApplication`
+   * below, which no real downloaded bundle (across ~20 checked, spanning
+   * both SDK generations) was ever found to call.
+   */
+  includedTags?: { id: string }[];
+  excludedTags?: { id: string }[];
 }
 
 /**
@@ -106,6 +116,8 @@ export interface PaperbackExtension {
     section: PBDiscoverSection,
     metadata: unknown,
   ) => Promise<PBPagedResults<PBDiscoverSectionItem>>;
+  /** Confirmed real usage (MangaDex): returns the genre/tag sections used to populate `PBSearchQuery.includedTags`/`excludedTags`. */
+  getSearchTags?: () => Promise<PBTagSection[]>;
 }
 
 export interface PBRequest {

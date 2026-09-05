@@ -18,6 +18,12 @@ import type {
   PBDiscoverSection,
   PBSourceManga,
 } from './types/paperback';
+import { FilterTypes, isXCheckboxValue } from './types/filterTypes';
+
+/** Single, fixed key under which a Paperback source's genre/tag filter is
+ * exposed on `MangaPlugin.filters` — there is only ever one such filter
+ * per source (`getSearchTags()` returns one flat list of tag sections). */
+const GENRE_FILTER_KEY = 'tags';
 
 /**
  * Compatibility layer for Paperback/Inkdex extensions — compiled JS bundles
@@ -234,6 +240,34 @@ function wrapPaperbackExtension(
       const headers = await application.__resolveDefaultImageHeaders();
       Object.assign(plugin.imageRequestInit.headers, headers);
     })
+    .then(async () => {
+      // Confirmed real usage (MangaDex, Netsky's community BatoTo):
+      // `getSearchTags()` returns the genre/tag sections a source's own
+      // `getSearchResults` reads `includedTags`/`excludedTags` from — the
+      // actual filtering mechanism real sources implement, NOT
+      // `Application.registerSearchFilter` (never called by any real
+      // downloaded bundle checked). `plugin.filters` starts undefined
+      // (this call is async, unlike a bundle's synchronous shape) and is
+      // mutated in place once resolved — the browse screen re-reads
+      // `plugin.filters` after each fetch, same as the novel side does.
+      if (!ext.getSearchTags) return;
+      const sections = await ext.getSearchTags();
+      const options = sections.flatMap(section =>
+        section.tags.map(tag => ({
+          label: `${section.title}: ${tag.title}`,
+          value: tag.id,
+        })),
+      );
+      if (options.length === 0) return;
+      plugin.filters = {
+        [GENRE_FILTER_KEY]: {
+          type: FilterTypes.ExcludableCheckboxGroup,
+          label: 'Genres',
+          options,
+          value: {},
+        },
+      };
+    })
     .catch(() => {});
 
   let cachedDiscoverSections: PBDiscoverSection[] | undefined;
@@ -277,7 +311,7 @@ function wrapPaperbackExtension(
     iconUrl: '',
     imageRequestInit: { headers: {} },
 
-    async popularManga(pageNo): Promise<MangaSourceItem[]> {
+    async popularManga(pageNo, options): Promise<MangaSourceItem[]> {
       await ready;
       if (pageNo <= 1) discoverMetadataByPage = new Map();
       const { metadata, canFetch } = metadataForPage(
@@ -285,6 +319,46 @@ function wrapPaperbackExtension(
         pageNo,
       );
       if (!canFetch) return [];
+
+      // A selected genre filter routes through getSearchResults with a
+      // blank title instead of a discover section — discover sections have
+      // no tag-filtering concept in the Paperback SDK, only search does
+      // (confirmed live: BatoTo builds its filtered-browse URL from
+      // `query.includedTags`, independent of `query.title`). Whether a
+      // *specific* source's own getSearchResults honors includedTags on a
+      // blank title is up to that source's implementation — same caveat as
+      // the blank-search-for-popular regression below, not something this
+      // adapter can control.
+      const genreFilter = options?.filters?.[GENRE_FILTER_KEY];
+      const genreValue =
+        genreFilter && isXCheckboxValue(genreFilter)
+          ? genreFilter.value
+          : undefined;
+      const hasSelectedTags =
+        (genreValue?.include?.length ?? 0) > 0 ||
+        (genreValue?.exclude?.length ?? 0) > 0;
+      if (hasSelectedTags && genreValue && ext.getSearchResults) {
+        const value = genreValue;
+        const results = await ext.getSearchResults(
+          {
+            title: '',
+            filters: [],
+            includedTags: value.include?.map(id => ({ id })),
+            excludedTags: value.exclude?.map(id => ({ id })),
+          },
+          metadata,
+          undefined,
+        );
+        if (results.metadata !== undefined) {
+          discoverMetadataByPage.set(pageNo + 1, results.metadata);
+        }
+        return results.items.map(item => ({
+          id: undefined,
+          name: item.title,
+          path: item.mangaId,
+          cover: item.imageUrl,
+        }));
+      }
 
       // REVERTED (confirmed real regression): a prior version of this
       // preferred `getSearchResults` with a blank query over a discover
