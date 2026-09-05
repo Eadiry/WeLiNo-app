@@ -1,5 +1,9 @@
 import { getUserAgent } from '@hooks/persisted/useUserAgent';
 import { Storage } from './storage';
+import {
+  looksCloudflareBlocked,
+  resolveCloudflareCookies,
+} from './cloudflareBypass';
 import type { PBApplication, PBRequest, PBResponse } from '../types/paperback';
 
 /**
@@ -93,34 +97,72 @@ export function createPaperbackApplication(
         if (intercepted) req = intercepted;
       }
 
-      // Same fix as the legacy adapter's requestManager: without a timeout,
-      // a server that never responds (a Cloudflare challenge that never
-      // resolves, a dead host) leaves this pending forever — a permanently
-      // stuck loading spinner with no error and no way out.
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30_000);
-      let res: globalThis.Response;
-      try {
-        res = await fetch(req.url, {
-          method: req.method,
-          headers: req.headers,
-          body:
-            typeof req.body === 'string' || req.body instanceof ArrayBuffer
-              ? req.body
-              : req.body
-              ? JSON.stringify(req.body)
-              : undefined,
-          signal: controller.signal,
+      const doFetch = async (
+        requestToSend: PBRequest,
+      ): Promise<{
+        res: globalThis.Response;
+        headers: Record<string, string>;
+        buffer: ArrayBuffer;
+      }> => {
+        // Same fix as the legacy adapter's requestManager: without a
+        // timeout, a server that never responds (a Cloudflare challenge
+        // that never resolves, a dead host) leaves this pending forever —
+        // a permanently stuck loading spinner with no error and no way out.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30_000);
+        let res: globalThis.Response;
+        try {
+          res = await fetch(requestToSend.url, {
+            method: requestToSend.method,
+            headers: requestToSend.headers,
+            body:
+              typeof requestToSend.body === 'string' ||
+              requestToSend.body instanceof ArrayBuffer
+                ? requestToSend.body
+                : requestToSend.body
+                ? JSON.stringify(requestToSend.body)
+                : undefined,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+        const buffer = await res.arrayBuffer();
+        const headers: Record<string, string> = {};
+        res.headers.forEach((value, key) => {
+          headers[key] = value;
         });
-      } finally {
-        clearTimeout(timeout);
-      }
-      let buffer = await res.arrayBuffer();
+        return { res, headers, buffer };
+      };
 
-      const headers: Record<string, string> = {};
-      res.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
+      let { res, headers, buffer } = await doFetch(req);
+
+      // Confirmed live this session: several real sources' backing sites
+      // (and at least one source's own API, api.allanime.day) sit behind
+      // Cloudflare and return a 403/503 "Just a moment..." challenge page
+      // instead of real data. Most of the affected sources implement
+      // neither of Paperback's official per-source bypass mechanisms
+      // (`executeInWebView`, `getCloudflareBypassRequestAsync`), so a
+      // transparent retry here — solve via a hidden WebView, attach the
+      // resulting cookies, try once more — is the only thing that helps
+      // them without needing any source cooperation.
+      if (
+        looksCloudflareBlocked(
+          res.status,
+          headers,
+          new TextDecoder('utf-8').decode(buffer),
+        )
+      ) {
+        const cookieHeader = await resolveCloudflareCookies(req.url);
+        if (cookieHeader) {
+          const retryReq: PBRequest = {
+            ...req,
+            headers: { ...(req.headers ?? {}), cookie: cookieHeader },
+          };
+          ({ res, headers, buffer } = await doFetch(retryReq));
+        }
+      }
+
       const response: PBResponse = {
         url: res.url || req.url,
         headers,
@@ -220,14 +262,35 @@ export function createPaperbackApplication(
 
     Selector: <T extends object>(obj: T, key: keyof T) => ({ obj, key }),
 
-    // Cloudflare/JS-challenge bypass needs a real WebView to execute a
-    // page's scripts — not implemented yet. Sources that need it
-    // (CloudflareBypassRequestProviding) will fail their request instead of
-    // hanging; everything else is unaffected.
-    executeInWebView: async () => {
-      throw new Error(
-        'executeInWebView is not supported yet — this source needs a JS-challenge bypass this app cannot perform.',
-      );
+    // Confirmed real, source-initiated API (not a Cloudflare-specific
+    // hook the host calls into sources) — a real downloaded bundle
+    // (Inkdex's AllManga) calls `Application.executeInWebView` directly
+    // as part of its own chapter-fetch logic, awaiting a real
+    // `{ result, storage: { cookies } }` back. Routed through the shared
+    // headless WebView host (`CloudflareBypassHost`) — the same one the
+    // transparent Cloudflare retry above uses — since both need a real
+    // WebView executing real JS, not a Cloudflare-specific mechanism.
+    executeInWebView: async (context: unknown) => {
+      // Lazy `require()`, not a top-level import — same reasoning as
+      // `helpers/cloudflareBypass.ts`'s `resolveCloudflareCookies`.
+      const { requestWebViewExecution } =
+        require('@components/CloudflareBypassHost') as typeof import('@components/CloudflareBypassHost');
+      const ctx = context as {
+        source: {
+          html: string;
+          baseUrl?: string;
+          userAgent?: string;
+        };
+        inject: string;
+        storage?: { cookies?: { name: string; value: string }[] };
+      };
+      const { result, cookies } = await requestWebViewExecution({
+        html: ctx.source.html,
+        baseUrl: ctx.source.baseUrl,
+        cookies: ctx.storage?.cookies,
+        inject: ctx.inject,
+      });
+      return { result, storage: { cookies } };
     },
 
     __resolveDefaultImageHeaders: async () => {

@@ -1,7 +1,10 @@
- 
 import { getUserAgent } from '@hooks/persisted/useUserAgent';
-import NativeFile from '@modules/native-file'
+import NativeFile from '@modules/native-file';
 import { parse as parseProto } from 'protobufjs';
+import {
+  looksCloudflareBlocked,
+  resolveCloudflareCookies,
+} from './cloudflareBypass';
 
 type FetchInit = {
   headers?: Record<string, string> | Headers;
@@ -40,12 +43,53 @@ const makeInit = (init?: FetchInit) => {
   return init;
 };
 
+/**
+ * Confirmed real, live evidence this session: from-scratch CMS-template
+ * scrapers (Madara — toonily.com was the concrete example that started
+ * challenging plain fetches mid-session) have no bypass mechanism at all,
+ * and this is the one shared choke point every such template's requests
+ * go through (registered as `@libs/fetch` in `mangaPluginManager.ts`).
+ * Peeks at a cloned response so the original body stream is left intact
+ * for the caller when nothing was blocked — only the (rare) blocked case
+ * pays for an extra clone + text decode.
+ */
+const withCloudflareRetry = async (
+  url: string,
+  init: FetchInit | undefined,
+  doFetch: () => Promise<Response>,
+): Promise<Response> => {
+  const res = await doFetch();
+  const headers: Record<string, string> = {};
+  res.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  const bodyText = await res
+    .clone()
+    .text()
+    .catch(() => undefined);
+  if (!looksCloudflareBlocked(res.status, headers, bodyText)) return res;
+
+  const cookieHeader = await resolveCloudflareCookies(url);
+  if (!cookieHeader) return res;
+
+  const retryInit: FetchInit = {
+    ...init,
+    headers: {
+      ...(init?.headers instanceof Headers
+        ? Object.fromEntries(init.headers.entries())
+        : init?.headers),
+      cookie: cookieHeader,
+    },
+  };
+  return fetch(url, retryInit as RequestInit);
+};
+
 export const fetchApi = async (
   url: string,
   init?: FetchInit,
 ): Promise<Response> => {
   init = makeInit(init);
-  return await fetch(url, init);
+  return await withCloudflareRetry(url, init, () => fetch(url, init));
 };
 
 const FILE_READER_PREFIX_LENGTH = 'data:application/octet-stream;base64,'
@@ -80,7 +124,7 @@ export const fetchText = async (
 ): Promise<string> => {
   init = makeInit(init);
   try {
-    const res = await fetch(url, init);
+    const res = await withCloudflareRetry(url, init, () => fetch(url, init));
     if (!res.ok) {
       throw new Error();
     }

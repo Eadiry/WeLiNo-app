@@ -1,5 +1,9 @@
 import { getUserAgent } from '@hooks/persisted/useUserAgent';
 import { Storage } from './storage';
+import {
+  looksCloudflareBlocked,
+  resolveCloudflareCookies,
+} from './cloudflareBypass';
 import type {
   LegacyCookie,
   LegacyRequest,
@@ -100,7 +104,9 @@ const createRequestManager = (info: {
     requestIn: LegacyRequest,
     retryCount = 0,
   ): Promise<LegacyResponse> => {
-    const attempt = async (): Promise<LegacyResponse> => {
+    const attempt = async (
+      extraCookieHeader?: string,
+    ): Promise<LegacyResponse> => {
       let request = requestIn;
       if (info.interceptor) {
         request = await info.interceptor.interceptRequest(request);
@@ -110,6 +116,11 @@ const createRequestManager = (info: {
         .map((c: LegacyCookie) => `${c.name}=${c.value};`)
         .join('');
       if (cookieData) headers.cookie = cookieData;
+      if (extraCookieHeader) {
+        headers.cookie = headers.cookie
+          ? `${headers.cookie} ${extraCookieHeader}`
+          : extraCookieHeader;
+      }
       headers['user-agent'] ??= getUserAgent();
 
       // Confirmed real bug: a real bundle passes `requestTimeout: 15000`
@@ -154,14 +165,42 @@ const createRequestManager = (info: {
       return response;
     };
 
+    let response: LegacyResponse | undefined;
     for (let tries = 0; ; tries++) {
       try {
-        return await attempt();
+        response = await attempt();
+        break;
       } catch (error) {
         if (tries >= retryCount) throw error;
         await new Promise(resolve => setTimeout(resolve, 500 * (tries + 1)));
       }
     }
+
+    // A separate, independent check on the *resolved* response — not
+    // folded into the network-failure retry loop above, which only
+    // retries on `fetch` throwing (a real network problem) and must keep
+    // that exact semantics. A Cloudflare block is a normal HTTP response
+    // (403/503), not a thrown error, so it resolves through the loop
+    // above just fine on the first attempt; this is what actually detects
+    // and recovers from it. See `helpers/cloudflareBypass.ts` for why a
+    // transparent, source-agnostic retry is necessary here — confirmed
+    // most affected sources implement no official bypass mechanism at all.
+    if (
+      looksCloudflareBlocked(response.status, response.headers, response.data)
+    ) {
+      const cookieHeader = await resolveCloudflareCookies(requestIn.url);
+      if (cookieHeader) {
+        try {
+          response = await attempt(cookieHeader);
+        } catch {
+          // Keep the original blocked response rather than throwing —
+          // matches the "surface the original failure, don't loop"
+          // contract the rest of this feature follows.
+        }
+      }
+    }
+
+    return response;
   },
 });
 

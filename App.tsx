@@ -14,6 +14,7 @@ import {
 import AppErrorBoundary, {
   ErrorFallback,
 } from '@components/AppErrorBoundary/AppErrorBoundary';
+import CloudflareBypassHost from '@components/CloudflareBypassHost';
 
 import Main from './src/navigators/Main';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -92,7 +93,7 @@ const App = () => {
 
   return (
     <Suspense fallback={null}>
-<ThemeProvider>
+      <ThemeProvider>
         <ThemedRootView>
           <KeyboardProvider>
             <AppErrorBoundary>
@@ -104,6 +105,7 @@ const App = () => {
                       backgroundColor="transparent"
                     />
                     <Main />
+                    <CloudflareBypassHost />
                   </BottomSheetModalProvider>
                 </ThemedPaperProvider>
               </SafeAreaProvider>
