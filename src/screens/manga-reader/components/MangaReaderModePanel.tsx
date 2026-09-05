@@ -1,28 +1,43 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  SlideInRight,
-  SlideOutRight,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import color from 'color';
+import React from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import MaterialCommunityIcons from '@react-native-vector-icons/material-design-icons';
 
-import { IconButtonV2, Menu } from '@components';
 import { useTheme } from '@hooks/persisted';
 import type { MangaRow } from '@database/schema';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 type ReaderMode = MangaRow['readerMode'];
 
-const MODE_OPTIONS: { value: ReaderMode; label: string }[] = [
-  { value: 'pagedLtr', label: 'Paged (left to right)' },
-  { value: 'pagedRtl', label: 'Paged (right to left)' },
-  { value: 'continuousVertical', label: 'Continuous vertical (webtoon)' },
-  { value: 'continuousLtr', label: 'Continuous (left to right)' },
-  { value: 'continuousRtl', label: 'Continuous (right to left)' },
+const MODE_OPTIONS: { value: ReaderMode; label: string; icon: string }[] = [
+  {
+    value: 'pagedLtr',
+    label: 'Paged (left to right)',
+    icon: 'book-open-page-variant-outline',
+  },
+  {
+    value: 'pagedRtl',
+    label: 'Paged (right to left)',
+    icon: 'book-open-page-variant-outline',
+  },
+  {
+    value: 'pagedVertical',
+    label: 'Paged (vertical)',
+    icon: 'book-open-variant-outline',
+  },
+  {
+    value: 'continuousLtr',
+    label: 'Continuous (left to right)',
+    icon: 'page-layout-header-footer',
+  },
+  {
+    value: 'continuousRtl',
+    label: 'Continuous (right to left)',
+    icon: 'page-layout-header-footer',
+  },
+  {
+    value: 'continuousVertical',
+    label: 'Continuous (webtoon)',
+    icon: 'page-layout-body',
+  },
 ];
 
 interface MangaReaderModePanelProps {
@@ -33,16 +48,15 @@ interface MangaReaderModePanelProps {
 }
 
 /**
- * `ReaderSettingsPanel.tsx`'s slide-in-panel + dropdown-row shape, scoped
- * down to the one setting manga's reader currently has: reading mode.
- * Replaces the old single toggle icon button (paged/vertical only) with
- * all 5 modes `Manga.readerMode` now supports (widened in migration
- * `20260905010000_widen_manga_reader_mode`). Not exported from/added to
- * `ReaderSettingsPanel.tsx` itself — that component's `DropdownRow` and
- * style helpers are file-local, and this panel's needs (one row, no
- * theme/font/margin settings) are narrow enough that duplicating just the
- * slide-in shell is simpler and safer than refactoring the novel reader's
- * internals to share it.
+ * Reading-mode picker, styled after a reference app's native-alert-style
+ * sheet the user shared directly (a rounded card, one radio row per mode
+ * with an icon, a "Cancel" text button) rather than the slide-in side
+ * panel this component started as — that shape didn't match what was
+ * actually being asked for, so this is a full replacement, not a tweak.
+ * `pagedVertical` (discrete top-to-bottom page swipes, as opposed to
+ * `continuousVertical`'s smooth scroll) is a new 6th mode added
+ * specifically because the reference showed it as a distinct option this
+ * app didn't have at all.
  */
 const MangaReaderModePanel: React.FC<MangaReaderModePanelProps> = ({
   visible,
@@ -51,119 +65,107 @@ const MangaReaderModePanel: React.FC<MangaReaderModePanelProps> = ({
   onChange,
 }) => {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const [open, setOpen] = useState(false);
-
-  if (!visible) {
-    return null;
-  }
-
-  const currentLabel =
-    MODE_OPTIONS.find(o => o.value === value)?.label ?? value;
 
   return (
-    <View style={styles.overlay}>
-      <AnimatedPressable
-        entering={FadeIn.duration(150)}
-        exiting={FadeOut.duration(150)}
-        style={styles.backdrop}
-        onPress={onDismiss}
-      />
-      <Animated.View
-        entering={SlideInRight.duration(220)}
-        exiting={SlideOutRight.duration(180)}
-        style={[styles.panel, { paddingTop: insets.top + 12 }]}
-      >
-        <View style={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Reading mode</Text>
-            <Menu
-              visible={open}
-              onDismiss={() => setOpen(false)}
-              anchor={
-                <Pressable
-                  style={styles.dropdownAnchor}
-                  android_ripple={{ color: theme.rippleColor }}
-                  onPress={() => setOpen(true)}
-                >
-                  <Text style={styles.dropdownValue}>{currentLabel}</Text>
-                  <IconButtonV2
-                    name={open ? 'menu-up' : 'menu-down'}
-                    theme={theme}
-                    size={20}
-                    padding={2}
-                    color={theme.onSurfaceVariant}
-                    onPress={() => setOpen(true)}
-                  />
-                </Pressable>
-              }
-            >
-              {MODE_OPTIONS.map(opt => (
-                <Menu.Item
-                  key={opt.value}
-                  title={opt.label}
-                  onPress={() => {
-                    onChange(opt.value);
-                    setOpen(false);
-                  }}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onDismiss}
+    >
+      <Pressable style={styles.backdrop} onPress={onDismiss}>
+        <Pressable
+          style={[
+            styles.card,
+            { backgroundColor: theme.surface2 ?? theme.surface },
+          ]}
+          onPress={() => {}}
+        >
+          <Text style={[styles.title, { color: theme.onSurface }]}>
+            Reading Mode
+          </Text>
+          {MODE_OPTIONS.map(opt => {
+            const selected = opt.value === value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={styles.row}
+                android_ripple={{ color: theme.rippleColor }}
+                onPress={() => onChange(opt.value)}
+              >
+                <MaterialCommunityIcons
+                  name={selected ? 'radiobox-marked' : 'radiobox-blank'}
+                  size={22}
+                  color={selected ? theme.primary : theme.onSurfaceVariant}
                 />
-              ))}
-            </Menu>
+                <Text
+                  style={[
+                    styles.rowLabel,
+                    { color: selected ? theme.primary : theme.onSurface },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+                <MaterialCommunityIcons
+                  name={opt.icon as never}
+                  size={22}
+                  color={theme.onSurfaceVariant}
+                />
+              </Pressable>
+            );
+          })}
+          <View style={styles.footer}>
+            <Pressable onPress={onDismiss} hitSlop={8}>
+              <Text style={[styles.cancel, { color: theme.primary }]}>
+                Cancel
+              </Text>
+            </Pressable>
           </View>
-        </View>
-      </Animated.View>
-    </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 };
 
 export default MangaReaderModePanel;
 
-const createStyles = (theme: ReturnType<typeof useTheme>) =>
-  StyleSheet.create({
-    overlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      flexDirection: 'row',
-      zIndex: 5,
-    },
-    backdrop: {
-      flex: 1,
-      backgroundColor: color(theme.backdrop ?? '#000000')
-        .alpha(0.32)
-        .string(),
-    },
-    panel: {
-      width: '82%',
-      maxWidth: 380,
-      backgroundColor: theme.surface,
-      borderTopLeftRadius: 12,
-      borderBottomLeftRadius: 12,
-    },
-    content: {
-      paddingVertical: 8,
-    },
-    row: {
-      minHeight: 56,
-      paddingHorizontal: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    rowLabel: {
-      color: theme.onSurfaceVariant,
-      fontSize: 15,
-      flexShrink: 1,
-    },
-    dropdownAnchor: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    dropdownValue: {
-      color: theme.onSurface,
-      fontSize: 16,
-    },
-  });
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  card: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    paddingHorizontal: 8,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 52,
+    paddingHorizontal: 16,
+  },
+  rowLabel: {
+    flex: 1,
+    fontSize: 16,
+  },
+  footer: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  cancel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

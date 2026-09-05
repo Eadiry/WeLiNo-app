@@ -33,16 +33,21 @@ export const manga = sqliteTable(
      * `continuousVertical` is the original "vertical" mode, kept as the
      * default so existing libraries don't change behavior; `pagedLtr` is
      * the original "paged" mode. Widened from a 2-value union to 5 in
-     * migration `20260905010000_widen_manga_reader_mode` (a data rename
-     * only — this column is plain `text` with no SQL-level CHECK
-     * constraint, so widening the TS union alone would have worked, but
-     * renaming the stored values keeps them self-descriptive going
-     * forward instead of carrying a permanent `'vertical'` alias).
+     * migration `20260905010000_widen_manga_reader_mode`, then to 6 with
+     * `pagedVertical` (a real, distinct mode — discrete top-to-bottom page
+     * swipes via `react-native-pager-view`'s own `orientation="vertical"`,
+     * as opposed to `continuousVertical`'s smooth scroll) after a reference
+     * app's reading-mode picker showed it as a separate option. No new
+     * migration needed for that addition — no existing rows ever had this
+     * value to rename, and this column is plain `text` with no SQL-level
+     * CHECK constraint (confirmed from the real generated migration SQL),
+     * so widening the TS union alone is sufficient.
      */
     readerMode: text('readerMode', {
       enum: [
         'pagedLtr',
         'pagedRtl',
+        'pagedVertical',
         'continuousVertical',
         'continuousLtr',
         'continuousRtl',

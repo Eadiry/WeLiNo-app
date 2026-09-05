@@ -144,6 +144,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
     switch (readerMode) {
       case 'pagedLtr':
       case 'pagedRtl':
+      case 'pagedVertical':
         return (
           <PagedMangaReader
             pages={pages}
@@ -151,6 +152,9 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
             theme={theme}
             initialPage={lastPageRead}
             rtl={readerMode === 'pagedRtl'}
+            orientation={
+              readerMode === 'pagedVertical' ? 'vertical' : 'horizontal'
+            }
             onPageChange={onPagedChange}
             onTap={toggleChrome}
           />

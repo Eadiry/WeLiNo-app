@@ -25,7 +25,8 @@ import type { DisplayMangaChapter, MangaScreenProps } from '@navigators/types';
 const READER_MODE_LABELS: Record<MangaRow['readerMode'], string> = {
   pagedLtr: 'Paged (left to right)',
   pagedRtl: 'Paged (right to left)',
-  continuousVertical: 'Continuous vertical (webtoon)',
+  pagedVertical: 'Paged (vertical)',
+  continuousVertical: 'Continuous (webtoon)',
   continuousLtr: 'Continuous (left to right)',
   continuousRtl: 'Continuous (right to left)',
 };
