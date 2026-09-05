@@ -66,16 +66,12 @@ describe('fetchMangaPlugins', () => {
     } as PluginItem;
     jest
       .mocked(getEnabledMangaRepositoriesFromDb)
-      .mockResolvedValueOnce([
-        { id: 1, url: repositoryUrl, enabled: true, format: 'native' },
-      ]);
+      .mockResolvedValueOnce([{ id: 1, url: repositoryUrl, enabled: true }]);
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
       json: async () => [plugin],
     } as Response);
 
-    await expect(fetchMangaPlugins()).resolves.toEqual([
-      { ...plugin, format: 'native' },
-    ]);
+    await expect(fetchMangaPlugins()).resolves.toEqual([plugin]);
 
     expect(getEnabledMangaRepositoriesFromDb).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith(repositoryUrl);

@@ -25,10 +25,6 @@ import {
   applyDefaultImageHeaders,
   createSandbox,
 } from './helpers/createSandbox';
-import {
-  fetchPaperbackRepositoryPlugins,
-  loadPaperbackPlugin,
-} from './paperbackAdapter';
 
 /**
  * Manga's own plugin manager — parallel to `pluginManager.ts`, not sharing
@@ -36,17 +32,7 @@ import {
  * legitimately share an `id` without colliding, since they're never mixed
  * into the same list). Only the sandbox execution model and low-level
  * network/file helpers are shared; see `helpers/createSandbox.ts`.
- *
- * Two plugin *formats* live side by side, tagged per `MangaRepository.format`
- * and carried through as `MangaPluginItem.format` so a cold-started app can
- * tell which loader an already-installed plugin needs without re-fetching
- * its repository: `native` (our own sandbox, `helpers/createSandbox.ts`) and
- * `paperback` (a compiled Paperback/Inkdex bundle, `paperbackAdapter.ts`).
  */
-
-export interface MangaPluginItem extends PluginItem {
-  format?: 'native' | 'paperback';
-}
 
 const packages: Record<string, any> = {
   'htmlparser2': { Parser },
@@ -64,15 +50,8 @@ const packages: Record<string, any> = {
 
 const initFromSandbox = createSandbox<MangaPlugin>(packages);
 
-const initPlugin = (
-  pluginId: string,
-  rawCode: string,
-  format: MangaPluginItem['format'] = 'native',
-) => {
-  const plugin =
-    format === 'paperback'
-      ? loadPaperbackPlugin(pluginId, rawCode)
-      : initFromSandbox(pluginId, rawCode);
+const initPlugin = (pluginId: string, rawCode: string) => {
+  const plugin = initFromSandbox(pluginId, rawCode);
   if (!plugin) {
     return undefined;
   }
@@ -84,12 +63,12 @@ const plugins: Record<string, MangaPlugin | undefined> = {};
 export const INSTALLED_MANGA_PLUGINS_KEY = 'INSTALL_MANGA_PLUGINS';
 
 const installMangaPlugin = async (
-  _plugin: MangaPluginItem,
+  _plugin: PluginItem,
 ): Promise<MangaPlugin | undefined> => {
   const rawCode = await fetch(_plugin.url, {
     headers: { 'pragma': 'no-cache', 'cache-control': 'no-cache' },
   }).then(res => res.text());
-  const plugin = initPlugin(_plugin.id, rawCode, _plugin.format);
+  const plugin = initPlugin(_plugin.id, rawCode);
   if (!plugin) {
     return undefined;
   }
@@ -130,22 +109,16 @@ const uninstallMangaPlugin = async (_plugin: PluginItem) => {
   }
 };
 
-const updateMangaPlugin = async (plugin: MangaPluginItem) => {
+const updateMangaPlugin = async (plugin: PluginItem) => {
   return installMangaPlugin(plugin);
 };
 
-const fetchMangaPlugins = async (): Promise<MangaPluginItem[]> => {
-  const allPlugins: MangaPluginItem[] = [];
+const fetchMangaPlugins = async (): Promise<PluginItem[]> => {
+  const allPlugins: PluginItem[] = [];
   const allRepositories = await getEnabledMangaRepositoriesFromDb();
 
   const repoPluginsRes = await Promise.allSettled(
-    allRepositories.map(async ({ url, format }) => {
-      const items =
-        format === 'paperback'
-          ? await fetchPaperbackRepositoryPlugins(url)
-          : ((await fetch(url).then(res => res.json())) as PluginItem[]);
-      return items.map<MangaPluginItem>(item => ({ ...item, format }));
-    }),
+    allRepositories.map(({ url }) => fetch(url).then(res => res.json())),
   );
 
   repoPluginsRes.forEach(repoPlugins => {
@@ -161,10 +134,7 @@ const fetchMangaPlugins = async (): Promise<MangaPluginItem[]> => {
 
 const getMangaPlugin = (pluginId: string) => plugins[pluginId];
 
-const loadMangaPlugin = async (
-  pluginId: string,
-  format: MangaPluginItem['format'] = 'native',
-) => {
+const loadMangaPlugin = async (pluginId: string) => {
   if (plugins[pluginId]) {
     return plugins[pluginId];
   }
@@ -172,7 +142,7 @@ const loadMangaPlugin = async (
   const filePath = `${MANGA_PLUGIN_STORAGE}/${pluginId}/index.js`;
   try {
     const code = await NativeFile.readFile(filePath);
-    const plugin = initPlugin(pluginId, code, format);
+    const plugin = initPlugin(pluginId, code);
     plugins[pluginId] = plugin;
     return plugin;
   } catch {
@@ -182,10 +152,10 @@ const loadMangaPlugin = async (
 
 const initializeInstalledMangaPlugins = async () => {
   const installedPlugins =
-    getMMKVObject<MangaPluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
+    getMMKVObject<PluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
   await Promise.allSettled(
     installedPlugins.map(async plugin => {
-      const installedPlugin = await loadMangaPlugin(plugin.id, plugin.format);
+      const installedPlugin = await loadMangaPlugin(plugin.id);
       if (!installedPlugin) {
         await installMangaPlugin(plugin);
       }
@@ -195,7 +165,7 @@ const initializeInstalledMangaPlugins = async () => {
 
 const reloadInstalledMangaPlugins = async (): Promise<string[]> => {
   const installedPlugins =
-    getMMKVObject<MangaPluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
+    getMMKVObject<PluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
 
   Object.keys(plugins).forEach(pluginId => {
     plugins[pluginId] = undefined;
@@ -204,7 +174,7 @@ const reloadInstalledMangaPlugins = async (): Promise<string[]> => {
   const results = await Promise.all(
     installedPlugins.map(async plugin => ({
       plugin,
-      source: await loadMangaPlugin(plugin.id, plugin.format),
+      source: await loadMangaPlugin(plugin.id),
     })),
   );
   const restoredPlugins = results
