@@ -72,18 +72,36 @@ const packages: Record<string, any> = {
 const initFromSandbox = createSandbox<MangaPlugin>(packages);
 
 const initPlugin = (
-  pluginId: string,
+  metadata: Pick<
+    MangaPluginItem,
+    'id' | 'name' | 'site' | 'lang' | 'version' | 'url' | 'iconUrl' | 'format'
+  >,
   rawCode: string,
-  format: MangaPluginItem['format'] = 'native',
 ) => {
   const plugin =
-    format === 'paperback'
-      ? loadPaperbackPlugin(pluginId, rawCode)
-      : initFromSandbox(pluginId, rawCode);
+    metadata.format === 'paperback'
+      ? loadPaperbackPlugin(metadata.id, rawCode)
+      : initFromSandbox(metadata.id, rawCode);
   if (!plugin) {
     return undefined;
   }
   applyDefaultImageHeaders(plugin);
+  // A Paperback bundle has no way to know its own display name/version/icon
+  // — that only ever exists in the repository's versioning.json, known here
+  // at install/reload time — so wrapPaperbackExtension/wrapLegacySource
+  // return placeholders (blank icon, version '0.0.0', name === id).
+  // Confirmed real bug: every installed Paperback source showed a blank
+  // icon and its raw id as its name in the Sources tab, and reinstalling
+  // one to pick up an update never did anything (comparing '0.0.0' against
+  // '0.0.0' never counts as newer). Overlay the real metadata every time.
+  if (metadata.format === 'paperback') {
+    plugin.name = metadata.name;
+    plugin.site = metadata.site;
+    plugin.lang = metadata.lang;
+    plugin.version = metadata.version;
+    plugin.url = metadata.url;
+    plugin.iconUrl = metadata.iconUrl;
+  }
   return plugin;
 };
 
@@ -99,7 +117,7 @@ const installMangaPlugin = async (
   _plugin: MangaPluginItem,
 ): Promise<MangaPlugin | undefined> => {
   let rawCode = await fetchPluginCode(_plugin.url);
-  let plugin = initPlugin(_plugin.id, rawCode, _plugin.format);
+  let plugin = initPlugin(_plugin, rawCode);
   // Paperback's older (0.8) bundle generation is served as `source.js`, not
   // `index.js` — fetchPaperbackRepositoryPlugins always assumes the latter
   // (correct for the main Inkdex registry and the even-older v1 generation,
@@ -114,7 +132,7 @@ const installMangaPlugin = async (
   ) {
     const altUrl = _plugin.url.replace(/index\.js$/, 'source.js');
     rawCode = await fetchPluginCode(altUrl);
-    plugin = initPlugin(_plugin.id, rawCode, _plugin.format);
+    plugin = initPlugin(_plugin, rawCode);
   }
   if (!plugin) {
     return undefined;
@@ -272,19 +290,16 @@ const getMangaPlugin = (pluginId: string) => plugins[pluginId];
 const getInstalledMangaPlugins = (): MangaPlugin[] =>
   Object.values(plugins).filter((p): p is MangaPlugin => !!p);
 
-const loadMangaPlugin = async (
-  pluginId: string,
-  format: MangaPluginItem['format'] = 'native',
-) => {
-  if (plugins[pluginId]) {
-    return plugins[pluginId];
+const loadMangaPlugin = async (metadata: MangaPluginItem) => {
+  if (plugins[metadata.id]) {
+    return plugins[metadata.id];
   }
 
-  const filePath = `${MANGA_PLUGIN_STORAGE}/${pluginId}/index.js`;
+  const filePath = `${MANGA_PLUGIN_STORAGE}/${metadata.id}/index.js`;
   try {
     const code = await NativeFile.readFile(filePath);
-    const plugin = initPlugin(pluginId, code, format);
-    plugins[pluginId] = plugin;
+    const plugin = initPlugin(metadata, code);
+    plugins[metadata.id] = plugin;
     return plugin;
   } catch {
     return undefined;
@@ -309,7 +324,7 @@ const initializeInstalledMangaPlugins = async () => {
     getMMKVObject<MangaPluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
   await Promise.allSettled(
     installedPlugins.map(async plugin => {
-      const installedPlugin = await loadMangaPlugin(plugin.id, plugin.format);
+      const installedPlugin = await loadMangaPlugin(plugin);
       if (!installedPlugin) {
         await installMangaPlugin(plugin);
       }
@@ -329,7 +344,7 @@ const reloadInstalledMangaPlugins = async (): Promise<string[]> => {
   const results = await Promise.all(
     installedPlugins.map(async plugin => ({
       plugin,
-      source: await loadMangaPlugin(plugin.id, plugin.format),
+      source: await loadMangaPlugin(plugin),
     })),
   );
   const restoredPlugins = results

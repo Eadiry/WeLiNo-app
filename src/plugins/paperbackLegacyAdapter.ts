@@ -80,7 +80,7 @@ export const loadPaperbackLegacySource = (
   code: string,
 ): MangaPlugin | undefined => {
   try {
-    const globals = createPaperbackLegacyGlobals(pluginId);
+    const globals = createPaperbackLegacyGlobals(pluginId, code);
     const registry = evalPaperbackLegacyBundle(code, globals);
     const SourceClass = registry[pluginId];
     if (typeof SourceClass !== 'function') {

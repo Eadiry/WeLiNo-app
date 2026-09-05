@@ -121,3 +121,50 @@ it('returns undefined for invalid code instead of throwing', () => {
     loadPaperbackLegacySource('TestExtension', 'this is not valid js {{{'),
   ).toBeUndefined();
 });
+
+// Confirmed real bug, found against a real downloaded bundle (Netsky's
+// community-extensions BatoTo, 0.8-gen): the hand-copied identity-global
+// name list (from the npm package's own file names) didn't match what real
+// compiled bundles actually call — `App.createRequest` (not
+// `createRequestObject`), `App.createDUISection`/`createMangaInfo`/
+// `createPartialSourceManga` (not covered at all), plus
+// `this.requestManager.getDefaultUserAgent()` on the manager instance
+// itself. All of these threw `... is not a function` the moment a real
+// source's `getMangaDetails`/`getSearchResults` actually ran, even though
+// the bundle *loaded* successfully (the id-presence check that gates
+// `loadPaperbackLegacySource`'s success never calls into the extension).
+const UNKNOWN_GLOBALS_BUNDLE = `
+"use strict";
+var _Sources = (function(){
+  class TestExtension {
+    constructor(cheerio) {
+      this.cheerio = cheerio;
+      this.requestManager = App.createRequestManager({});
+    }
+    async getMangaDetails(mangaId) {
+      const request = App.createRequest({ url: 'https://example.com/' + mangaId, method: 'GET' });
+      const ua = await this.requestManager.getDefaultUserAgent();
+      const section = App.createDUISection({ id: 'x' });
+      const info = App.createMangaInfo({ titles: ['Test Manga'], image: 'https://example.com/cover.jpg', status: 1 });
+      const partial = App.createPartialSourceManga({ mangaId, mangaName: 'Test Manga' });
+      return { ...info, request, ua, section, partial };
+    }
+    async getChapters(mangaId) { return []; }
+    async getChapterDetails(mangaId, chapterId) { return { id: chapterId, mangaId, pages: [], longStrip: false }; }
+  }
+  return { TestExtension: TestExtension };
+})();
+this.Sources = _Sources;
+if (typeof exports === 'object' && typeof module !== 'undefined') { module.exports.Sources = this.Sources; }
+`;
+
+it('resolves unknown create* globals and requestManager.getDefaultUserAgent instead of throwing', async () => {
+  const plugin = loadPaperbackLegacySource(
+    'TestExtension',
+    UNKNOWN_GLOBALS_BUNDLE,
+  );
+  expect(plugin).toBeDefined();
+  const manga = await plugin!.parseManga('m1');
+  expect(manga.name).toBe('Test Manga');
+  expect(manga.cover).toBe('https://example.com/cover.jpg');
+});

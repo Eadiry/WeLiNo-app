@@ -111,6 +111,7 @@ export interface LegacyRequestManager {
     request: LegacyRequest,
     retryCount?: number,
   ) => Promise<LegacyResponse>;
+  getDefaultUserAgent: () => Promise<string>;
 }
 
 /**

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Image,
+  type ImageStyle,
   Pressable,
+  type StyleProp,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -25,6 +27,43 @@ import {
 import type { MangaPlugin } from '@plugins/types/manga';
 import type { MangaBrowseScreenProps } from '@navigators/types';
 import type { ThemeColors } from '@theme/types';
+
+/**
+ * `fetchPaperbackRepositoryPlugins` builds every icon URL assuming the
+ * current (0.9) repo layout — `<id>/static/<icon>` — confirmed correct for
+ * the main Inkdex registry. The older v1/0.8 repos it now also supports
+ * (`paperbackLegacyAdapter.ts`) serve icons one path segment over instead —
+ * `<id>/includes/<icon>` — confirmed against real NMN's/GameFuzzy's/
+ * Netsky's repos. Which convention a given repo uses isn't knowable from
+ * `versioning.json` alone (that's the same "discover the format from the
+ * actual bundle content" situation `loadPaperbackPlugin` is already in), so
+ * fall back client-side on a load failure rather than guess ahead of time.
+ */
+const withIncludesIconFallback = (uri: string) =>
+  uri.includes('/static/') ? uri.replace('/static/', '/includes/') : undefined;
+
+const PluginIcon = ({
+  uri,
+  style,
+}: {
+  uri: string;
+  style: StyleProp<ImageStyle>;
+}) => {
+  const [source, setSource] = useState(uri);
+  useEffect(() => setSource(uri), [uri]);
+  return (
+    <Image
+      source={{ uri: source }}
+      style={style}
+      onError={() => {
+        const fallback = withIncludesIconFallback(uri);
+        if (fallback && fallback !== source) {
+          setSource(fallback);
+        }
+      }}
+    />
+  );
+};
 
 type BrowseRoute = { key: 'sources' | 'plugins'; title: string };
 const routes: BrowseRoute[] = [
@@ -157,8 +196,8 @@ const SourcesTab = ({
         android_ripple={{ color: theme.rippleColor }}
         onPress={() => onPress(item)}
       >
-        <Image
-          source={{ uri: item.iconUrl }}
+        <PluginIcon
+          uri={item.iconUrl}
           style={[styles.icon, { backgroundColor: theme.surfaceVariant }]}
         />
         <View style={styles.details}>
@@ -252,8 +291,8 @@ const PluginsTab = ({
         const isPending = pendingIds.has(item.id);
         return (
           <View style={styles.row}>
-            <Image
-              source={{ uri: item.iconUrl }}
+            <PluginIcon
+              uri={item.iconUrl}
               style={[styles.icon, { backgroundColor: theme.surfaceVariant }]}
             />
             <View style={styles.details}>

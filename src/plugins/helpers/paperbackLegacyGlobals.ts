@@ -8,13 +8,25 @@ import type {
 } from '../types/paperbackLegacy';
 
 /**
- * Every `create*` global the real `paperback-extensions-common` npm package
- * (MIT, v4.3.5 — downloaded and read directly) defines on `global` at import
- * time. Confirmed by grepping its real `_impl.js` files for
- * `_global.create* = function`: all but two are trivial identity functions
- * (`createManga = (m) => m`) — real compiled extensions call them purely for
- * their own type-narrowing convenience, so returning the argument unchanged
- * is byte-for-byte what the real implementation does.
+ * Every `create*` global a v1/0.8 bundle expects ambient in scope is a
+ * trivial identity function (`createManga = (m) => m`, confirmed by grepping
+ * the real, MIT-licensed `paperback-extensions-common` npm package's
+ * `_impl.js` files) — real compiled extensions call them purely for their
+ * own type-narrowing convenience, so returning the argument unchanged is
+ * byte-for-byte what the real implementation does.
+ *
+ * A hand-copied exhaustive name list turned out to be the wrong shape for
+ * this: a real downloaded 0.8 bundle (Netsky's community `BatoTo`) calls
+ * `App.createRequest`, `App.createDUISection`, `App.createMangaInfo`,
+ * `App.createPartialSourceManga` — names that exist nowhere in the npm
+ * package version inspected, meaning real bundles were compiled against
+ * other SDK-generation namespaces the package's own history doesn't cover
+ * cleanly. Since every one of these is *empirically always* an identity
+ * function regardless of name or generation, `createPaperbackLegacyGlobals`
+ * instead scans the bundle's own source for every `create<Name>` identifier
+ * it actually references and synthesizes an identity function for any one
+ * not already explicitly implemented below — self-healing against future
+ * unknown SDK generations instead of guessing names ahead of time.
  *
  * The two with real behavior — `createRequestManager` (network) and
  * `createSourceStateManager` (persistence) — are reimplemented against this
@@ -22,37 +34,6 @@ import type {
  * for `@libs/storage`) rather than the real impl's `axios`/`Buffer`, which
  * don't exist in this runtime.
  */
-
-const IDENTITY_GLOBAL_NAMES = [
-  'createButton',
-  'createChapter',
-  'createChapterDetails',
-  'createCookie',
-  'createForm',
-  'createHeader',
-  'createHomeSection',
-  'createIconText',
-  'createInputField',
-  'createLabel',
-  'createLink',
-  'createManga',
-  'createMangaTile',
-  'createMangaUpdates',
-  'createMultilineLabel',
-  'createNavigationButton',
-  'createOAuthButton',
-  'createPagedResults',
-  'createRequestObject',
-  'createSearchField',
-  'createSection',
-  'createSelect',
-  'createSourceManga',
-  'createStepper',
-  'createSwitch',
-  'createTag',
-  'createTagSection',
-  'createTrackedManga',
-] as const;
 
 /** Real behavior from `RawData/_impl.js` — extensions occasionally call this directly on a response's raw bytes, not just through `createRequestManager`. */
 const createRawData = (byteArray: Uint8Array) => {
@@ -99,6 +80,11 @@ const createRequestManager = (info: {
   };
 }): LegacyRequestManager => ({
   ...info,
+  // Confirmed real usage: a real downloaded 0.8 bundle's own interceptor
+  // calls `this.requestManager.getDefaultUserAgent()` — on the manager
+  // instance itself, not a separate `Application` global like the 0.9
+  // format's `Application.getDefaultUserAgent()`.
+  getDefaultUserAgent: async () => getUserAgent(),
   schedule: async (requestIn: LegacyRequest): Promise<LegacyResponse> => {
     let request = requestIn;
     if (info.interceptor) {
@@ -162,9 +148,15 @@ const createSourceStateManager = (pluginId: string) => {
  * `Function(...)` parameter (v1's convention) and as a property on an `App`
  * object (0.8's convention), so a bundle written against either resolves
  * the same calls correctly without needing to detect which one it is.
+ *
+ * `code` is scanned (not executed) for every `create<Name>` identifier the
+ * bundle actually references, so an SDK-generation-specific name this
+ * adapter has never seen still resolves to a harmless identity function
+ * instead of throwing `... is not a function` — see the file doc comment.
  */
 export function createPaperbackLegacyGlobals(
   pluginId: string,
+  code: string,
 ): Record<string, unknown> {
   const globals: Record<string, unknown> = {
     createRequestManager,
@@ -172,8 +164,11 @@ export function createPaperbackLegacyGlobals(
     createRawData,
     createByteArray: (rawData: ArrayLike<number>) => new Uint8Array(rawData),
   };
-  for (const name of IDENTITY_GLOBAL_NAMES) {
-    globals[name] = (value: unknown) => value;
+  const referenced = code.match(/\bcreate[A-Z]\w*/g) ?? [];
+  for (const name of new Set(referenced)) {
+    if (!(name in globals)) {
+      globals[name] = (value: unknown) => value;
+    }
   }
   return globals;
 }

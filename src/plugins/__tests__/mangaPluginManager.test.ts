@@ -233,6 +233,57 @@ describe('installMangaPlugin — Paperback filename fallback', () => {
   });
 });
 
+describe('installMangaPlugin — Paperback metadata overlay', () => {
+  it('overlays the repository-listed name/version/icon onto a loaded Paperback plugin', async () => {
+    // Confirmed real bug: wrapPaperbackExtension/wrapLegacySource always
+    // return placeholder metadata (blank iconUrl, name === id, version
+    // '0.0.0') since a compiled bundle has no way to know its own display
+    // name/version/icon — that only ever exists in the repository's
+    // versioning.json, known here at install time. Before this fix every
+    // installed Paperback source showed a blank icon and its raw id as its
+    // name in the Sources tab, and reinstalling one to pick up a real
+    // update never did anything ('0.0.0' never compares as newer than
+    // '0.0.0').
+    const bundle = `
+      (function(f){
+        if (typeof exports === "object" && typeof module !== "undefined") { module.exports = f(); }
+      })(function(){
+        class MetaSource {
+          constructor(cheerio) { this.cheerio = cheerio; }
+          async getMangaDetails(mangaId) { return { titles: ['M'], image: 'https://example.com/m.jpg', status: 1 }; }
+          async getChapters(mangaId) { return []; }
+          async getChapterDetails(mangaId, chapterId) { return { id: chapterId, mangaId, pages: [], longStrip: false }; }
+        }
+        return { MetaSource: MetaSource };
+      });
+    `;
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      text: async () => bundle,
+    } as Response);
+
+    const plugin = await installMangaPlugin({
+      id: 'MetaSource',
+      name: 'Zero Scans',
+      site: 'Zero Scans',
+      lang: 'en',
+      version: '1.0.0',
+      url: 'https://example.com/repo/MetaSource/index.js',
+      iconUrl: 'https://example.com/repo/MetaSource/includes/icon.png',
+      format: 'paperback',
+    } as PluginItem & { format: 'paperback' });
+
+    expect(plugin).toMatchObject({
+      id: 'MetaSource',
+      name: 'Zero Scans',
+      site: 'Zero Scans',
+      lang: 'en',
+      version: '1.0.0',
+      iconUrl: 'https://example.com/repo/MetaSource/includes/icon.png',
+    });
+    expect(getMangaPlugin('MetaSource')).toMatchObject({ name: 'Zero Scans' });
+  });
+});
+
 describe('installMangaPlugin', () => {
   it('does not register a plugin when its bundle cannot be persisted', async () => {
     const plugin = {
