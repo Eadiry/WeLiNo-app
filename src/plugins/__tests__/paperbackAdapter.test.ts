@@ -111,6 +111,56 @@ describe('loadPaperbackPlugin', () => {
     const manga = await plugin!.parseManga('m1');
     expect(manga.name).toBe('Legacy Manga');
   });
+
+  it('popularManga uses a discover section rather than a blank-query search, matching a real source that treats blank search as "no results"', async () => {
+    // Confirmed real bug/regression, found from a real downloaded bundle
+    // (Inkdex's Webtoon): its actual getSearchResults is
+    // `query.title ? this.getTitlesByKeyword(...) : Promise.resolve({items:[]})`
+    // — a blank title deterministically returns ZERO items, before any
+    // network call even happens. A prior version of popularManga preferred
+    // getSearchResults with a blank query over a discover section (to work
+    // around a *different* real issue — a source's first discover section
+    // sometimes being a small curated shelf) — that broke Popular entirely
+    // for any source following this same sensible "blank query = no
+    // results" convention. Discover sections are the real, intended
+    // "Popular" mechanism; blank-query search is only a last-resort
+    // fallback for a source with no discover sections at all.
+    const bundle = `
+      var source = (function (e) {
+        class BlankSearchExtension {
+          async getMangaDetails(mangaId) {
+            return { mangaId, mangaInfo: { thumbnailUrl: '', synopsis: '', primaryTitle: mangaId } };
+          }
+          async getChapters(sourceManga) { return []; }
+          async getChapterDetails(chapter) { return { id: chapter.chapterId, mangaId: chapter.sourceManga.mangaId, pages: [] }; }
+          async getSearchResults(query) {
+            return query.title ? { items: [{ mangaId: 'searched', title: 'Searched Result', imageUrl: '' }] } : { items: [] };
+          }
+          async getDiscoverSections() {
+            return [{ id: 'trending', title: 'Trending' }];
+          }
+          async getDiscoverSectionItems(section) {
+            return { items: [{ mangaId: 'trending-1', title: 'Trending Manga', imageUrl: 'https://example.com/t.jpg' }] };
+          }
+        }
+        e.BlankSearchSource = new BlankSearchExtension();
+        return e;
+      })({});
+    `;
+
+    const plugin = loadPaperbackPlugin('BlankSearchSource', bundle);
+    expect(plugin).toBeDefined();
+
+    const popular = await plugin!.popularManga(1);
+    expect(popular).toEqual([
+      {
+        id: undefined,
+        name: 'Trending Manga',
+        path: 'trending-1',
+        cover: 'https://example.com/t.jpg',
+      },
+    ]);
+  });
 });
 
 describe('fetchPaperbackRepositoryPlugins', () => {

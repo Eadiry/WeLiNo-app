@@ -286,22 +286,25 @@ function wrapPaperbackExtension(
       );
       if (!canFetch) return [];
 
-      // Confirmed real bug: a real source's *first* discover section is
-      // typically a small curated homepage shelf (e.g. "Latest", "Featured")
-      // that runs out of pages well before the site's actual catalog does —
-      // "browse manga X, only ever see some of it, load-more eventually
-      // stops". `getSearchResults` with a blank query is the whole-catalog
-      // endpoint on virtually every real source (the legacy v1/0.8 adapter
-      // already relies on exactly this for its own "popular" — see
-      // `paperbackLegacyAdapter.ts`'s `search('', pageNo)`), so prefer it
-      // here too and only fall back to a discover section for the rare
-      // source that has sections but no search endpoint at all.
-      if (ext.getSearchResults) {
-        const results = await ext.getSearchResults(
-          { title: '', filters: [] },
-          metadata,
-          undefined,
-        );
+      // REVERTED (confirmed real regression): a prior version of this
+      // preferred `getSearchResults` with a blank query over a discover
+      // section, reasoning that discover sections are often a small curated
+      // homepage shelf. That reasoning doesn't hold in general — confirmed
+      // from a real downloaded bundle (Inkdex's Webtoon):
+      // `getSearchResults` there is
+      // `query.title ? this.getTitlesByKeyword(...) : Promise.resolve({items:[]})`
+      // — a blank title deterministically returns ZERO items, before any
+      // network call even happens. Treating "blank search" as "whole
+      // catalog" is not a safe assumption across real sources; it broke
+      // Popular entirely for Webtoon (and likely others with the same
+      // sensible "blank query = no results" convention). Discover sections
+      // are the real, intended "Popular" mechanism in the Paperback SDK —
+      // use them first, and only fall back to a blank-query search for a
+      // source that exposes no discover sections at all.
+      const sections = await discoverSections();
+      if (sections.length > 0 && ext.getDiscoverSectionItems) {
+        const section = sections[0];
+        const results = await ext.getDiscoverSectionItems(section, metadata);
         if (results.metadata !== undefined) {
           discoverMetadataByPage.set(pageNo + 1, results.metadata);
         }
@@ -312,10 +315,12 @@ function wrapPaperbackExtension(
           cover: item.imageUrl,
         }));
       }
-      const sections = await discoverSections();
-      if (sections.length > 0 && ext.getDiscoverSectionItems) {
-        const section = sections[0];
-        const results = await ext.getDiscoverSectionItems(section, metadata);
+      if (ext.getSearchResults) {
+        const results = await ext.getSearchResults(
+          { title: '', filters: [] },
+          metadata,
+          undefined,
+        );
         if (results.metadata !== undefined) {
           discoverMetadataByPage.set(pageNo + 1, results.metadata);
         }
