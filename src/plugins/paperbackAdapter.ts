@@ -1,4 +1,7 @@
-import { createPaperbackApplication } from './helpers/paperbackApplication';
+import {
+  createPaperbackApplication,
+  type PaperbackApplicationInternal,
+} from './helpers/paperbackApplication';
 import { loadPaperbackLegacySource } from './paperbackLegacyAdapter';
 import {
   MangaStatus,
@@ -121,7 +124,7 @@ export const loadPaperbackPlugin = (
     const registry = evalPaperbackBundle(code, application);
     const extension = registry[pluginId];
     if (extension && typeof extension.getMangaDetails === 'function') {
-      return wrapPaperbackExtension(pluginId, extension);
+      return wrapPaperbackExtension(pluginId, extension, application);
     }
   } catch (error) {
     // Not silent: a bundle that loads but is the wrong API generation (a
@@ -202,6 +205,7 @@ const chapterStub = (mangaId: string, chapterId: string): PBChapter => ({
 function wrapPaperbackExtension(
   pluginId: string,
   ext: PaperbackExtension,
+  application: PaperbackApplicationInternal,
 ): MangaPlugin {
   // Real extensions register their request interceptors inside
   // `initialise()` — e.g. a confirmed real bundle: `async initialise(){
@@ -213,7 +217,24 @@ function wrapPaperbackExtension(
   // `loadPaperbackPlugin` so that function can stay synchronous (matching
   // every other plugin loader in this codebase) — every exposed method
   // below awaits `ready` first instead.
-  const ready = (ext.initialise?.() ?? Promise.resolve()).catch(() => {});
+  //
+  // Once interceptors are registered, also resolve a default set of *image*
+  // headers from them (see `__resolveDefaultImageHeaders`'s doc comment) and
+  // merge them into the returned plugin's `imageRequestInit` in place — the
+  // object reference React components hold onto is mutated once shortly
+  // after load, well before any image actually gets requested.
+  // Declared before `plugin` (assigned below) since this closure runs later,
+  // asynchronously — by the time it actually executes, `plugin` is set. Must
+  // stay `let`: it's assigned once, but not at declaration time, so `const`
+  // isn't syntactically valid here.
+  // eslint-disable-next-line prefer-const
+  let plugin: MangaPlugin;
+  const ready = (ext.initialise?.() ?? Promise.resolve())
+    .then(async () => {
+      const headers = await application.__resolveDefaultImageHeaders();
+      Object.assign(plugin.imageRequestInit.headers, headers);
+    })
+    .catch(() => {});
 
   let cachedDiscoverSections: PBDiscoverSection[] | undefined;
   const discoverSections = async () => {
@@ -222,7 +243,31 @@ function wrapPaperbackExtension(
     return cachedDiscoverSections;
   };
 
-  return {
+  // Paperback's pagination "metadata" is an opaque continuation cursor the
+  // extension itself returns — not a page number. Confirmed real bug from
+  // this: sending a fabricated `{ page: pageNo }` as metadata isn't
+  // recognized by real extensions, so they just re-return page 1 every
+  // time, no matter what pageNo is asked for — scrolling looked like it
+  // loaded more but was actually just repeating the same first batch.
+  // Fixed by caching "the metadata needed to fetch page N" as pages are
+  // fetched sequentially (page N's *response* metadata is exactly what page
+  // N+1 needs to ask for) — correct as long as pages are requested in
+  // order, which is the only way `MangaSourceScreen.tsx` ever calls this.
+  let discoverMetadataByPage = new Map<number, unknown>();
+  let searchMetadataByPage = new Map<number, unknown>();
+  let lastSearchTerm: string | undefined;
+
+  const metadataForPage = (
+    cache: Map<number, unknown>,
+    pageNo: number,
+  ): { metadata: unknown; canFetch: boolean } => {
+    if (pageNo <= 1) return { metadata: undefined, canFetch: true };
+    return cache.has(pageNo)
+      ? { metadata: cache.get(pageNo), canFetch: true }
+      : { metadata: undefined, canFetch: false };
+  };
+
+  plugin = {
     id: pluginId,
     name: pluginId,
     site: pluginId,
@@ -234,13 +279,20 @@ function wrapPaperbackExtension(
 
     async popularManga(pageNo): Promise<MangaSourceItem[]> {
       await ready;
+      if (pageNo <= 1) discoverMetadataByPage = new Map();
+      const { metadata, canFetch } = metadataForPage(
+        discoverMetadataByPage,
+        pageNo,
+      );
+      if (!canFetch) return [];
+
       const sections = await discoverSections();
       if (sections.length > 0 && ext.getDiscoverSectionItems) {
         const section = sections[0];
-        const results = await ext.getDiscoverSectionItems(
-          section,
-          pageNo > 1 ? { page: pageNo } : undefined,
-        );
+        const results = await ext.getDiscoverSectionItems(section, metadata);
+        if (results.metadata !== undefined) {
+          discoverMetadataByPage.set(pageNo + 1, results.metadata);
+        }
         return results.items.map(item => ({
           id: undefined,
           name: item.title,
@@ -251,9 +303,12 @@ function wrapPaperbackExtension(
       if (ext.getSearchResults) {
         const results = await ext.getSearchResults(
           { title: '', filters: [] },
-          pageNo > 1 ? { page: pageNo } : undefined,
+          metadata,
           undefined,
         );
+        if (results.metadata !== undefined) {
+          discoverMetadataByPage.set(pageNo + 1, results.metadata);
+        }
         return results.items.map(item => ({
           id: undefined,
           name: item.title,
@@ -267,11 +322,24 @@ function wrapPaperbackExtension(
     async searchManga(searchTerm, pageNo): Promise<MangaSourceItem[]> {
       await ready;
       if (!ext.getSearchResults) return [];
+      if (searchTerm !== lastSearchTerm || pageNo <= 1) {
+        lastSearchTerm = searchTerm;
+        searchMetadataByPage = new Map();
+      }
+      const { metadata, canFetch } = metadataForPage(
+        searchMetadataByPage,
+        pageNo,
+      );
+      if (!canFetch) return [];
+
       const results = await ext.getSearchResults(
         { title: searchTerm, filters: [] },
-        pageNo > 1 ? { page: pageNo } : undefined,
+        metadata,
         undefined,
       );
+      if (results.metadata !== undefined) {
+        searchMetadataByPage.set(pageNo + 1, results.metadata);
+      }
       return results.items.map(item => ({
         id: undefined,
         name: item.title,
@@ -304,4 +372,5 @@ function wrapPaperbackExtension(
       return { pages: details.pages };
     },
   };
+  return plugin;
 }

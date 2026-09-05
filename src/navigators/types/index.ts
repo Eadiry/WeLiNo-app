@@ -1,5 +1,6 @@
 import { ChapterInfo, NovelInfo } from '@database/types';
 import type { MangaChapterRow, MangaRow } from '@database/schema';
+import type { MangaChapterItem } from '@plugins/types/manga';
 import {
   CompositeScreenProps,
   NavigatorScreenParams,
@@ -33,11 +34,32 @@ export type RootStackParamList = {
   };
   MangaBrowseScreen: undefined;
   MangaSourceScreen: { pluginId: string; pluginName: string };
-  MangaScreen:
-    | MangaRow
-    | { path: string; pluginId: string; name: string; cover?: string | null };
-  MangaChapterScreen: { manga: MangaRow; chapter: MangaChapterRow };
+  MangaScreen: MangaRow | TransientMangaParam;
+  MangaChapterScreen: {
+    manga: MangaRow | TransientMangaParam;
+    chapters: DisplayMangaChapter[];
+    initialIndex: number;
+  };
 };
+
+/** A manga not yet in the library — opened straight from Browse, nothing persisted for it yet. */
+export type TransientMangaParam = {
+  path: string;
+  pluginId: string;
+  name: string;
+  cover?: string | null;
+};
+
+/**
+ * Whichever shape a chapter is currently known in — a saved `MangaChapter`
+ * row, or a not-yet-persisted plugin response (string id). Reading no longer
+ * requires adding to the library first (see `MangaScreen.tsx`/
+ * `MangaChapterScreen.tsx`) — a numeric `id` is just how the reader tells
+ * whether there's a DB row to persist progress/read-state against.
+ */
+export type DisplayMangaChapter =
+  | MangaChapterRow
+  | (MangaChapterItem & { id: string });
 
 export type BottomNavigatorParamList = {
   Library: undefined;

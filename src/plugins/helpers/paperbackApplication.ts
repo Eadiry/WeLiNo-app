@@ -18,7 +18,29 @@ import type { PBApplication, PBRequest, PBResponse } from '../types/paperback';
  * plain `{ obj, key }` descriptor that `registerInterceptor` et al. can call
  * straight through.
  */
-export function createPaperbackApplication(pluginId: string): PBApplication {
+/**
+ * Not part of the real `@paperback/types` SDK — an extra, our-own-use-only
+ * member `paperbackAdapter.ts` calls once after an extension's `initialise()`
+ * has registered its interceptors, to get the headers a real Paperback app
+ * would apply to *image* requests too. Confirmed necessary from a real
+ * downloaded bundle: its interceptor injects a static `referer` (and
+ * `user-agent`) into every request's headers — that's exactly the kind of
+ * hotlink-protection bypass a manga CDN commonly requires, but our actual
+ * `<Image>` loading never goes through `scheduleRequest`/the interceptor
+ * pipeline at all (native image components fetch directly via
+ * `imageRequestInit`). Running the request-interceptor chain once against an
+ * empty synthetic request recovers any *static* headers like this without
+ * needing to re-run interceptors per image — correct for interceptors that
+ * don't depend on the specific URL (the common case; this doesn't help ones
+ * that compute per-URL signing).
+ */
+export interface PaperbackApplicationInternal {
+  __resolveDefaultImageHeaders: () => Promise<Record<string, string>>;
+}
+
+export function createPaperbackApplication(
+  pluginId: string,
+): PBApplication & PaperbackApplicationInternal {
   const storage = new Storage(pluginId);
   const secureStorage = new Storage(`${pluginId}_secure`);
 
@@ -194,6 +216,18 @@ export function createPaperbackApplication(pluginId: string): PBApplication {
       throw new Error(
         'executeInWebView is not supported yet — this source needs a JS-challenge bypass this app cannot perform.',
       );
+    },
+
+    __resolveDefaultImageHeaders: async () => {
+      let req: PBRequest = { url: '', method: 'GET', headers: {} };
+      for (const { request: reqSel } of requestInterceptors.values()) {
+        const intercepted = (await callSelector(
+          reqSel,
+          req,
+        )) as PBRequest | void;
+        if (intercepted) req = intercepted;
+      }
+      return req.headers ?? {};
     },
   };
 }

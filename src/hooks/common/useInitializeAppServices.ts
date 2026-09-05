@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { initializeInstalledPlugins } from '@plugins/pluginManager';
+import { initializeInstalledMangaPlugins } from '@plugins/mangaPluginManager';
 import { backgroundTasks } from '@services/backgroundTasks';
 
 type AppServicesState = {
@@ -12,7 +13,16 @@ let initializationPromise: Promise<void> | undefined;
 
 const initializeAppServices = (): Promise<void> => {
   if (!initializationPromise) {
-    initializationPromise = initializeInstalledPlugins()
+    initializationPromise = Promise.all([
+      initializeInstalledPlugins(),
+      // Confirmed real bug: installed manga plugins vanished on every app
+      // restart. Two causes, both fixed — installMangaPlugin now actually
+      // persists to its MMKV registry (mangaPluginManager.ts), and this call
+      // was simply missing: nothing invoked the manga equivalent of
+      // initializeInstalledPlugins at startup at all, so even a correctly
+      // persisted registry was never read back.
+      initializeInstalledMangaPlugins(),
+    ])
       .then(async () => {
         await backgroundTasks.refresh();
       })

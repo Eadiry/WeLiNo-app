@@ -140,6 +140,21 @@ const installMangaPlugin = async (
     plugins[plugin.id] = plugin;
     currentPlugin = plugin;
   }
+  // The novel side does this in a *hook* (usePlugins.ts's installPlugin
+  // wraps pluginManager.ts's and separately setMMKVObjects the installed
+  // list) rather than in pluginManager.ts itself. Manga's Browse UI calls
+  // this function directly with no equivalent hook layer, so that step
+  // never happened anywhere for manga — confirmed real bug: installed
+  // plugins vanished on app restart (the .js bundle was still on disk, but
+  // nothing recorded that it should be reloaded). Doing it here instead of
+  // introducing a hook is more robust anyway: it can't be skipped by a
+  // caller forgetting to also update the registry.
+  const installedPlugins =
+    getMMKVObject<MangaPluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
+  setMMKVObject(INSTALLED_MANGA_PLUGINS_KEY, [
+    ...installedPlugins.filter(p => p.id !== _plugin.id),
+    _plugin,
+  ]);
   return currentPlugin;
 };
 
@@ -154,6 +169,12 @@ const uninstallMangaPlugin = async (_plugin: PluginItem) => {
   if (await NativeFile.exists(pluginFilePath)) {
     await NativeFile.unlink(pluginFilePath);
   }
+  const installedPlugins =
+    getMMKVObject<MangaPluginItem[]>(INSTALLED_MANGA_PLUGINS_KEY) || [];
+  setMMKVObject(
+    INSTALLED_MANGA_PLUGINS_KEY,
+    installedPlugins.filter(p => p.id !== _plugin.id),
+  );
 };
 
 interface InstalledTemplatePlugin {
