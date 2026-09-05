@@ -36,12 +36,13 @@ export const isMangaRepoUrlDuplicated = async (repoUrl: string) => {
 
 export const createMangaRepository = async (
   repoUrl: string,
+  format: MangaRepositoryRow['format'] = 'native',
 ): Promise<MangaRepositoryRow> => {
   const row = await dbManager.write(
     async tx =>
       await tx
         .insert(mangaRepositorySchema)
-        .values({ url: repoUrl })
+        .values({ url: repoUrl, format })
         .returning()
         .get(),
   );

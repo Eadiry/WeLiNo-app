@@ -10,7 +10,13 @@ import {
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Appbar, EmptyView, IconButtonV2, SafeAreaView } from '@components';
+import {
+  Appbar,
+  EmptyView,
+  IconButtonV2,
+  SafeAreaView,
+  SegmentedControl,
+} from '@components';
 import Switch from '@components/Switch/Switch';
 import { useBoolean } from '@hooks/index';
 import { useTheme } from '@hooks/persisted';
@@ -58,6 +64,7 @@ const SettingsMangaRepositoryScreen = ({
     setFalse: hideAdd,
   } = useBoolean();
   const [url, setUrl] = useState('');
+  const [format, setFormat] = useState<MangaRepositoryRow['format']>('native');
   const [sourceCount, setSourceCount] = useState<number | null>(null);
 
   const refreshSourceCount = useCallback(async () => {
@@ -70,7 +77,7 @@ const SettingsMangaRepositoryScreen = ({
   }, [refreshSourceCount, repositories.length]);
 
   const addRepository = useCallback(
-    async (repoUrl: string) => {
+    async (repoUrl: string, repoFormat: MangaRepositoryRow['format']) => {
       const trimmed = repoUrl.trim();
       if (!REPO_URL_RE.test(trimmed)) {
         showToast('Enter a valid repository URL');
@@ -80,8 +87,9 @@ const SettingsMangaRepositoryScreen = ({
         showToast('That repository is already added');
         return;
       }
-      await createMangaRepository(trimmed);
+      await createMangaRepository(trimmed, repoFormat);
       setUrl('');
+      setFormat('native');
       hideAdd();
       refreshSourceCount();
     },
@@ -90,7 +98,7 @@ const SettingsMangaRepositoryScreen = ({
 
   useEffect(() => {
     if (params?.url) {
-      addRepository(params.url);
+      addRepository(params.url, 'native');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.url]);
@@ -177,12 +185,38 @@ const SettingsMangaRepositoryScreen = ({
               mode="outlined"
               placeholder="https://…/index.json"
               value={url}
-              onChangeText={setUrl}
+              onChangeText={text => {
+                setUrl(text);
+                // Best-effort default: Paperback/Inkdex catalogs are always
+                // published as a `versioning.json` registry.
+                setFormat(
+                  text.trim().endsWith('versioning.json')
+                    ? 'paperback'
+                    : 'native',
+                );
+              }}
             />
+            <View style={styles.formatGap} />
+            <SegmentedControl<'native' | 'paperback'>
+              options={[
+                { value: 'native', label: 'LNReader-style' },
+                { value: 'paperback', label: 'Paperback/Inkdex' },
+              ]}
+              value={format}
+              onChange={setFormat}
+              theme={theme}
+            />
+            <Text
+              style={[styles.formatHint, { color: theme.onSurfaceVariant }]}
+            >
+              {format === 'paperback'
+                ? 'A compiled Paperback/Inkdex extension catalog (a versioning.json URL).'
+                : "This app's own plugin format — a JSON list of sources."}
+            </Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={hideAdd}>Cancel</Button>
-            <Button onPress={() => addRepository(url)}>Add</Button>
+            <Button onPress={() => addRepository(url, format)}>Add</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -206,4 +240,6 @@ const styles = StyleSheet.create({
   },
   repoUrl: { flex: 1, fontSize: 14 },
   fab: { margin: 16, position: 'absolute', right: 0 },
+  formatGap: { height: 12 },
+  formatHint: { fontSize: 12, marginTop: 8 },
 });
