@@ -85,58 +85,83 @@ const createRequestManager = (info: {
   // instance itself, not a separate `Application` global like the 0.9
   // format's `Application.getDefaultUserAgent()`.
   getDefaultUserAgent: async () => getUserAgent(),
-  schedule: async (requestIn: LegacyRequest): Promise<LegacyResponse> => {
-    let request = requestIn;
-    if (info.interceptor) {
-      request = await info.interceptor.interceptRequest(request);
-    }
-    const headers: Record<string, string> = { ...(request.headers ?? {}) };
-    const cookieData = (request.cookies ?? [])
-      .map((c: LegacyCookie) => `${c.name}=${c.value};`)
-      .join('');
-    if (cookieData) headers.cookie = cookieData;
-    headers['user-agent'] ??= getUserAgent();
+  // Confirmed real bug: the real SDK's `schedule(request, retryCount)`
+  // signature takes a caller-supplied retry count — a real bundle
+  // explicitly calls `this.requestManager.schedule(request, 1)` expecting
+  // one automatic retry on a network-level failure — but this
+  // implementation never read the parameter at all, so a single transient
+  // failure (a dropped mobile connection, a DNS blip) surfaced immediately
+  // as a hard error instead of being retried once, the way the extension
+  // author explicitly asked for. Only retries actual network failures
+  // (`fetch` rejecting or timing out) — an HTTP error status still resolves
+  // normally on the first attempt, since that's a real answer from the
+  // server, not a transient failure.
+  schedule: async (
+    requestIn: LegacyRequest,
+    retryCount = 0,
+  ): Promise<LegacyResponse> => {
+    const attempt = async (): Promise<LegacyResponse> => {
+      let request = requestIn;
+      if (info.interceptor) {
+        request = await info.interceptor.interceptRequest(request);
+      }
+      const headers: Record<string, string> = { ...(request.headers ?? {}) };
+      const cookieData = (request.cookies ?? [])
+        .map((c: LegacyCookie) => `${c.name}=${c.value};`)
+        .join('');
+      if (cookieData) headers.cookie = cookieData;
+      headers['user-agent'] ??= getUserAgent();
 
-    // Confirmed real bug: a real bundle passes `requestTimeout: 15000` into
-    // `createRequestManager`, but nothing here ever honored it — a server
-    // that never responds (a Cloudflare challenge that never resolves, a
-    // dead host, anything) left `fetch` pending forever, which surfaced as
-    // a permanently stuck loading spinner with no error and no way out,
-    // distinct from — and worse than — a source that fails outright (which
-    // at least shows a retryable error).
-    const controller = new AbortController();
-    const timeoutMs = info.requestTimeout ?? 30_000;
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    let res: Response;
-    try {
-      res = await fetch(`${request.url}${request.param ?? ''}`, {
-        method: request.method,
-        headers,
-        body: buildRequestBody(request.data, headers),
-        signal: controller.signal,
+      // Confirmed real bug: a real bundle passes `requestTimeout: 15000`
+      // into `createRequestManager`, but nothing here ever honored it — a
+      // server that never responds (a Cloudflare challenge that never
+      // resolves, a dead host, anything) left `fetch` pending forever,
+      // which surfaced as a permanently stuck loading spinner with no error
+      // and no way out, distinct from — and worse than — a source that
+      // fails outright (which at least shows a retryable error).
+      const controller = new AbortController();
+      const timeoutMs = info.requestTimeout ?? 30_000;
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      let res: Response;
+      try {
+        res = await fetch(`${request.url}${request.param ?? ''}`, {
+          method: request.method,
+          headers,
+          body: buildRequestBody(request.data, headers),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+      const buffer = await res.arrayBuffer();
+      const rawData = new Uint8Array(buffer);
+      const data = new TextDecoder('utf-8').decode(buffer);
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
       });
-    } finally {
-      clearTimeout(timeout);
-    }
-    const buffer = await res.arrayBuffer();
-    const rawData = new Uint8Array(buffer);
-    const data = new TextDecoder('utf-8').decode(buffer);
-    const responseHeaders: Record<string, string> = {};
-    res.headers.forEach((value, key) => {
-      responseHeaders[key] = value;
-    });
 
-    let response: LegacyResponse = {
-      rawData: rawData.buffer as ArrayBuffer,
-      data,
-      status: res.status,
-      headers: responseHeaders,
-      request,
+      let response: LegacyResponse = {
+        rawData: rawData.buffer as ArrayBuffer,
+        data,
+        status: res.status,
+        headers: responseHeaders,
+        request,
+      };
+      if (info.interceptor) {
+        response = await info.interceptor.interceptResponse(response);
+      }
+      return response;
     };
-    if (info.interceptor) {
-      response = await info.interceptor.interceptResponse(response);
+
+    for (let tries = 0; ; tries++) {
+      try {
+        return await attempt();
+      } catch (error) {
+        if (tries >= retryCount) throw error;
+        await new Promise(resolve => setTimeout(resolve, 500 * (tries + 1)));
+      }
     }
-    return response;
   },
 });
 
