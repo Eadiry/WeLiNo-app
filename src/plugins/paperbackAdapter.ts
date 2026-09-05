@@ -286,10 +286,22 @@ function wrapPaperbackExtension(
       );
       if (!canFetch) return [];
 
-      const sections = await discoverSections();
-      if (sections.length > 0 && ext.getDiscoverSectionItems) {
-        const section = sections[0];
-        const results = await ext.getDiscoverSectionItems(section, metadata);
+      // Confirmed real bug: a real source's *first* discover section is
+      // typically a small curated homepage shelf (e.g. "Latest", "Featured")
+      // that runs out of pages well before the site's actual catalog does —
+      // "browse manga X, only ever see some of it, load-more eventually
+      // stops". `getSearchResults` with a blank query is the whole-catalog
+      // endpoint on virtually every real source (the legacy v1/0.8 adapter
+      // already relies on exactly this for its own "popular" — see
+      // `paperbackLegacyAdapter.ts`'s `search('', pageNo)`), so prefer it
+      // here too and only fall back to a discover section for the rare
+      // source that has sections but no search endpoint at all.
+      if (ext.getSearchResults) {
+        const results = await ext.getSearchResults(
+          { title: '', filters: [] },
+          metadata,
+          undefined,
+        );
         if (results.metadata !== undefined) {
           discoverMetadataByPage.set(pageNo + 1, results.metadata);
         }
@@ -300,12 +312,10 @@ function wrapPaperbackExtension(
           cover: item.imageUrl,
         }));
       }
-      if (ext.getSearchResults) {
-        const results = await ext.getSearchResults(
-          { title: '', filters: [] },
-          metadata,
-          undefined,
-        );
+      const sections = await discoverSections();
+      if (sections.length > 0 && ext.getDiscoverSectionItems) {
+        const section = sections[0];
+        const results = await ext.getDiscoverSectionItems(section, metadata);
         if (results.metadata !== undefined) {
           discoverMetadataByPage.set(pageNo + 1, results.metadata);
         }

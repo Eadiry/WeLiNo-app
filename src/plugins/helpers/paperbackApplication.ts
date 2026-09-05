@@ -93,16 +93,28 @@ export function createPaperbackApplication(
         if (intercepted) req = intercepted;
       }
 
-      const res = await fetch(req.url, {
-        method: req.method,
-        headers: req.headers,
-        body:
-          typeof req.body === 'string' || req.body instanceof ArrayBuffer
-            ? req.body
-            : req.body
-            ? JSON.stringify(req.body)
-            : undefined,
-      });
+      // Same fix as the legacy adapter's requestManager: without a timeout,
+      // a server that never responds (a Cloudflare challenge that never
+      // resolves, a dead host) leaves this pending forever — a permanently
+      // stuck loading spinner with no error and no way out.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      let res: globalThis.Response;
+      try {
+        res = await fetch(req.url, {
+          method: req.method,
+          headers: req.headers,
+          body:
+            typeof req.body === 'string' || req.body instanceof ArrayBuffer
+              ? req.body
+              : req.body
+              ? JSON.stringify(req.body)
+              : undefined,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
       let buffer = await res.arrayBuffer();
 
       const headers: Record<string, string> = {};

@@ -97,11 +97,27 @@ const createRequestManager = (info: {
     if (cookieData) headers.cookie = cookieData;
     headers['user-agent'] ??= getUserAgent();
 
-    const res = await fetch(`${request.url}${request.param ?? ''}`, {
-      method: request.method,
-      headers,
-      body: buildRequestBody(request.data, headers),
-    });
+    // Confirmed real bug: a real bundle passes `requestTimeout: 15000` into
+    // `createRequestManager`, but nothing here ever honored it — a server
+    // that never responds (a Cloudflare challenge that never resolves, a
+    // dead host, anything) left `fetch` pending forever, which surfaced as
+    // a permanently stuck loading spinner with no error and no way out,
+    // distinct from — and worse than — a source that fails outright (which
+    // at least shows a retryable error).
+    const controller = new AbortController();
+    const timeoutMs = info.requestTimeout ?? 30_000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(`${request.url}${request.param ?? ''}`, {
+        method: request.method,
+        headers,
+        body: buildRequestBody(request.data, headers),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     const buffer = await res.arrayBuffer();
     const rawData = new Uint8Array(buffer);
     const data = new TextDecoder('utf-8').decode(buffer);

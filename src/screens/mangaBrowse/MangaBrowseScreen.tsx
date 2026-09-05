@@ -13,7 +13,13 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { TabView, type TabBarProps } from 'react-native-tab-view';
 
-import { EmptyView, IconButtonV2, SafeAreaView, TopTabBar } from '@components';
+import {
+  ConfirmationDialog,
+  EmptyView,
+  IconButtonV2,
+  SafeAreaView,
+  TopTabBar,
+} from '@components';
 import { useTheme } from '@hooks/persisted';
 import { getString } from '@i18n/translations';
 import { getLocaleLanguageName } from '@utils/constants/languages';
@@ -22,6 +28,7 @@ import {
   fetchMangaPlugins,
   getInstalledMangaPlugins,
   installMangaPlugin,
+  uninstallMangaPlugin,
   type MangaPluginItem,
 } from '@plugins/mangaPluginManager';
 import type { MangaPlugin } from '@plugins/types/manga';
@@ -232,6 +239,7 @@ const PluginsTab = ({
   );
   const [loading, setLoading] = useState(true);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const [pendingUninstall, setPendingUninstall] = useState<MangaPluginItem>();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -272,63 +280,90 @@ const PluginsTab = ({
     [onInstalled],
   );
 
+  const uninstall = useCallback(
+    async (plugin: MangaPluginItem) => {
+      await uninstallMangaPlugin(plugin);
+      showToast(`Uninstalled ${plugin.name}`);
+      setInstalledIds(new Set(getInstalledMangaPlugins().map(p => p.id)));
+      onInstalled();
+    },
+    [onInstalled],
+  );
+
   return (
-    <FlatList
-      data={available}
-      keyExtractor={item => item.id}
-      refreshing={loading}
-      onRefresh={refresh}
-      ListEmptyComponent={
-        !loading ? (
-          <EmptyView
-            description={getString('browseScreen.noPlugins')}
-            theme={theme}
-          />
-        ) : null
-      }
-      renderItem={({ item }) => {
-        const isInstalled = installedIds.has(item.id);
-        const isPending = pendingIds.has(item.id);
-        return (
-          <View style={styles.row}>
-            <PluginIcon
-              uri={item.iconUrl}
-              style={[styles.icon, { backgroundColor: theme.surfaceVariant }]}
+    <>
+      <FlatList
+        data={available}
+        keyExtractor={item => item.id}
+        refreshing={loading}
+        onRefresh={refresh}
+        ListEmptyComponent={
+          !loading ? (
+            <EmptyView
+              description={getString('browseScreen.noPlugins')}
+              theme={theme}
             />
-            <View style={styles.details}>
-              <Text
-                numberOfLines={1}
-                style={[styles.name, { color: theme.onSurface }]}
-              >
-                {item.name}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={[styles.description, { color: theme.onSurfaceVariant }]}
-              >
-                {getLocaleLanguageName(item.lang)} · {item.version}
-              </Text>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const isInstalled = installedIds.has(item.id);
+          const isPending = pendingIds.has(item.id);
+          return (
+            <View style={styles.row}>
+              <PluginIcon
+                uri={item.iconUrl}
+                style={[styles.icon, { backgroundColor: theme.surfaceVariant }]}
+              />
+              <View style={styles.details}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.name, { color: theme.onSurface }]}
+                >
+                  {item.name}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.description,
+                    { color: theme.onSurfaceVariant },
+                  ]}
+                >
+                  {getLocaleLanguageName(item.lang)} · {item.version}
+                </Text>
+              </View>
+              {isInstalled ? (
+                <IconButtonV2
+                  name="check"
+                  color={theme.primary}
+                  theme={theme}
+                  onPress={() => setPendingUninstall(item)}
+                />
+              ) : (
+                <IconButtonV2
+                  name="download-outline"
+                  color={theme.onSurface}
+                  disabled={isPending}
+                  theme={theme}
+                  onPress={() => install(item)}
+                />
+              )}
             </View>
-            {isInstalled ? (
-              <IconButtonV2
-                name="check"
-                color={theme.primary}
-                theme={theme}
-                onPress={() => {}}
-              />
-            ) : (
-              <IconButtonV2
-                name="download-outline"
-                color={theme.onSurface}
-                disabled={isPending}
-                theme={theme}
-                onPress={() => install(item)}
-              />
-            )}
-          </View>
-        );
-      }}
-    />
+          );
+        }}
+      />
+      <ConfirmationDialog
+        title="Uninstall plugin"
+        message={
+          pendingUninstall
+            ? `Remove ${pendingUninstall.name}? Its installed source will no longer be available.`
+            : undefined
+        }
+        visible={!!pendingUninstall}
+        confirmLabel="Uninstall"
+        onDismiss={() => setPendingUninstall(undefined)}
+        onConfirm={() => pendingUninstall && uninstall(pendingUninstall)}
+      />
+    </>
   );
 };
 
