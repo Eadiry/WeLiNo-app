@@ -63,3 +63,63 @@ export const createCategoryTriggerQuery = `
     UPDATE Category SET sort = (SELECT IFNULL(sort, new.id)) WHERE id = new.id;
   END;
 `;
+
+/** `createNovelTriggerQuery*`'s manga mirror (`Chapter`/`Novel` -> `MangaChapter`/`Manga`, `novelId` -> `mangaId`). */
+export const createMangaTriggerQueryInsert = `CREATE TRIGGER IF NOT EXISTS update_manga_stats
+AFTER INSERT ON MangaChapter
+BEGIN
+    UPDATE Manga
+    SET
+        totalChapters = totalChapters + 1,
+        chaptersDownloaded = chaptersDownloaded + CASE WHEN NEW.isDownloaded = 1 THEN 1 ELSE 0 END,
+        chaptersUnread = chaptersUnread + CASE WHEN NEW.unread = 1 THEN 1 ELSE 0 END,
+        lastUpdatedAt = CASE
+            WHEN NEW.updatedTime IS NOT NULL
+                 AND (
+                    lastUpdatedAt IS NULL
+                    OR julianday(NEW.updatedTime) > julianday(lastUpdatedAt)
+                 )
+            THEN NEW.updatedTime
+            ELSE lastUpdatedAt
+        END
+    WHERE id = NEW.mangaId;
+END;
+
+`;
+export const createMangaTriggerQueryUpdate = `CREATE TRIGGER IF NOT EXISTS update_manga_stats_on_update
+AFTER UPDATE OF isDownloaded, unread, readTime, updatedTime ON MangaChapter
+BEGIN
+    UPDATE Manga
+    SET
+        chaptersDownloaded = (SELECT COUNT(*) FROM MangaChapter WHERE MangaChapter.mangaId = Manga.id AND MangaChapter.isDownloaded = 1),
+        chaptersUnread = (SELECT COUNT(*) FROM MangaChapter WHERE MangaChapter.mangaId = Manga.id AND MangaChapter.unread = 1),
+        lastReadAt = (SELECT MAX(readTime) FROM MangaChapter WHERE MangaChapter.mangaId = Manga.id),
+        lastUpdatedAt = (
+            SELECT updatedTime
+            FROM MangaChapter
+            WHERE MangaChapter.mangaId = Manga.id AND updatedTime IS NOT NULL
+            ORDER BY julianday(updatedTime) DESC
+            LIMIT 1
+        )
+    WHERE id = NEW.mangaId;
+END;
+`;
+export const createMangaTriggerQueryDelete = `CREATE TRIGGER IF NOT EXISTS update_manga_stats_on_delete
+AFTER DELETE ON MangaChapter
+BEGIN
+    UPDATE Manga
+    SET
+        chaptersDownloaded = (SELECT COUNT(*) FROM MangaChapter WHERE MangaChapter.mangaId = Manga.id AND MangaChapter.isDownloaded = 1),
+        chaptersUnread = (SELECT COUNT(*) FROM MangaChapter WHERE MangaChapter.mangaId = Manga.id AND MangaChapter.unread = 1),
+        totalChapters = (SELECT COUNT(*) FROM MangaChapter WHERE MangaChapter.mangaId = Manga.id),
+        lastReadAt = (SELECT MAX(readTime) FROM MangaChapter WHERE MangaChapter.mangaId = Manga.id),
+        lastUpdatedAt = (
+            SELECT updatedTime
+            FROM MangaChapter
+            WHERE MangaChapter.mangaId = Manga.id AND updatedTime IS NOT NULL
+            ORDER BY julianday(updatedTime) DESC
+            LIMIT 1
+        )
+    WHERE id = OLD.mangaId;
+END;
+`;

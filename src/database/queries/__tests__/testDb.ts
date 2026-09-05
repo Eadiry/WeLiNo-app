@@ -13,6 +13,9 @@ import {
 } from '@database/manager/manager';
 import {
   createCategoryTriggerQuery,
+  createMangaTriggerQueryDelete,
+  createMangaTriggerQueryInsert,
+  createMangaTriggerQueryUpdate,
   createNovelTriggerQueryDelete,
   createNovelTriggerQueryInsert,
   createNovelTriggerQueryUpdate,
@@ -218,6 +221,9 @@ export function createTestDb() {
   sqlite.executeSync(createNovelTriggerQueryInsert);
   sqlite.executeSync(createNovelTriggerQueryUpdate);
   sqlite.executeSync(createNovelTriggerQueryDelete);
+  sqlite.executeSync(createMangaTriggerQueryInsert);
+  sqlite.executeSync(createMangaTriggerQueryUpdate);
+  sqlite.executeSync(createMangaTriggerQueryDelete);
   sqlite.executeSync(createCategoryTriggerQuery);
 
   // Populate default categories

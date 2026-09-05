@@ -12,6 +12,9 @@ import { Platform } from 'react-native';
 import { createCategoryDefaultQuery } from './queryStrings/populate';
 import {
   createCategoryTriggerQuery,
+  createMangaTriggerQueryDelete,
+  createMangaTriggerQueryInsert,
+  createMangaTriggerQueryUpdate,
   createNovelTriggerQueryDelete,
   createNovelTriggerQueryInsert,
   createNovelTriggerQueryUpdate,
@@ -348,11 +351,17 @@ const createDbTriggers = (executor: SqlExecutor) => {
   executor.executeSync('DROP TRIGGER IF EXISTS update_novel_stats');
   executor.executeSync('DROP TRIGGER IF EXISTS update_novel_stats_on_update');
   executor.executeSync('DROP TRIGGER IF EXISTS update_novel_stats_on_delete');
+  executor.executeSync('DROP TRIGGER IF EXISTS update_manga_stats');
+  executor.executeSync('DROP TRIGGER IF EXISTS update_manga_stats_on_update');
+  executor.executeSync('DROP TRIGGER IF EXISTS update_manga_stats_on_delete');
   executor.executeSync('DROP TRIGGER IF EXISTS add_category');
   executor.executeSync(createCategoryTriggerQuery);
   executor.executeSync(createNovelTriggerQueryDelete);
   executor.executeSync(createNovelTriggerQueryInsert);
   executor.executeSync(createNovelTriggerQueryUpdate);
+  executor.executeSync(createMangaTriggerQueryDelete);
+  executor.executeSync(createMangaTriggerQueryInsert);
+  executor.executeSync(createMangaTriggerQueryUpdate);
 };
 
 export const runDatabaseBootstrap = (executor: SqlExecutor) => {

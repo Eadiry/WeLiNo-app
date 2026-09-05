@@ -21,7 +21,7 @@ import {
 import type { MangaRow } from '@database/schema';
 import type { MangaLibraryScreenProps } from '@navigators/types';
 
-const NUM_COLUMNS = 3;
+const NUM_COLUMNS = 2;
 const COVER_MARGIN = 4;
 const EMPTY_LIBRARY: MangaRow[] = [];
 

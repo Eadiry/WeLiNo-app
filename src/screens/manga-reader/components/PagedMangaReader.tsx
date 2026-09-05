@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -12,6 +12,7 @@ import Animated, {
 import MangaPageImage from '@components/MangaPageImage';
 import type { ImageRequestInit } from '@plugins/types';
 import type { ThemeColors } from '@theme/types';
+import type { MangaReaderHandle } from './readerHandle';
 
 const MAX_SCALE = 4;
 
@@ -137,49 +138,64 @@ interface PagedMangaReaderProps {
 /**
  * Page-to-page navigation via `react-native-pager-view` — the manga
  * (non-webtoon) mode. `rtl` flips swipe direction for right-to-left manga.
+ * Exposes a `goToPage` imperative handle so the chapter screen's seekbar
+ * can jump pages (`react-native-pager-view`'s own `setPage`).
  */
-const PagedMangaReader = ({
-  pages,
-  requestInit,
-  theme,
-  initialPage = 0,
-  rtl = false,
-  orientation = 'horizontal',
-  onPageChange,
-  onTap,
-}: PagedMangaReaderProps) => {
-  const { width, height } = useWindowDimensions();
-  const [current, setCurrent] = useState(initialPage);
+const PagedMangaReader = forwardRef<MangaReaderHandle, PagedMangaReaderProps>(
+  (
+    {
+      pages,
+      requestInit,
+      theme,
+      initialPage = 0,
+      rtl = false,
+      orientation = 'horizontal',
+      onPageChange,
+      onTap,
+    },
+    ref,
+  ) => {
+    const { width, height } = useWindowDimensions();
+    const [current, setCurrent] = useState(initialPage);
+    const pagerRef = useRef<PagerView>(null);
 
-  return (
-    <PagerView
-      style={styles.pager}
-      initialPage={initialPage}
-      orientation={orientation}
-      layoutDirection={rtl ? 'rtl' : 'ltr'}
-      onPageSelected={event => {
-        const index = event.nativeEvent.position;
-        setCurrent(index);
-        onPageChange(index);
-      }}
-    >
-      {pages.map((uri, index) => (
-        <View key={`${index}-${uri}`} style={styles.page} collapsable={false}>
-          {Math.abs(index - current) <= 1 ? (
-            <ZoomablePage
-              uri={uri}
-              requestInit={requestInit}
-              theme={theme}
-              width={width}
-              height={height}
-              onTap={onTap}
-            />
-          ) : null}
-        </View>
-      ))}
-    </PagerView>
-  );
-};
+    useImperativeHandle(ref, () => ({
+      goToPage: (index: number) => pagerRef.current?.setPage(index),
+    }));
+
+    return (
+      <PagerView
+        ref={pagerRef}
+        style={styles.pager}
+        initialPage={initialPage}
+        orientation={orientation}
+        layoutDirection={rtl ? 'rtl' : 'ltr'}
+        onPageSelected={event => {
+          const index = event.nativeEvent.position;
+          setCurrent(index);
+          onPageChange(index);
+        }}
+      >
+        {pages.map((uri, index) => (
+          <View key={`${index}-${uri}`} style={styles.page} collapsable={false}>
+            {Math.abs(index - current) <= 1 ? (
+              <ZoomablePage
+                uri={uri}
+                requestInit={requestInit}
+                theme={theme}
+                width={width}
+                height={height}
+                onTap={onTap}
+              />
+            ) : null}
+          </View>
+        ))}
+      </PagerView>
+    );
+  },
+);
+
+PagedMangaReader.displayName = 'PagedMangaReader';
 
 export default PagedMangaReader;
 

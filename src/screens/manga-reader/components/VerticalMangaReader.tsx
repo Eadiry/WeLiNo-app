@@ -1,10 +1,11 @@
-import { useCallback, useRef } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 
 import MangaPageImage from '@components/MangaPageImage';
 import type { ImageRequestInit } from '@plugins/types';
 import type { ThemeColors } from '@theme/types';
+import type { MangaReaderHandle } from './readerHandle';
 
 interface VerticalMangaReaderProps {
   pages: string[];
@@ -22,17 +23,18 @@ interface VerticalMangaReaderProps {
  * already used everywhere else). Progress is "furthest visible page",
  * tracked the same way `FlatList.onViewableItemsChanged` would.
  */
-const VerticalMangaReader = ({
-  pages,
-  requestInit,
-  theme,
-  initialPage = 0,
-  onProgress,
-  onTap,
-}: VerticalMangaReaderProps) => {
+const VerticalMangaReader = forwardRef<
+  MangaReaderHandle,
+  VerticalMangaReaderProps
+>(({ pages, requestInit, theme, initialPage = 0, onProgress, onTap }, ref) => {
   const { width } = useWindowDimensions();
   const listRef = useRef<LegendListRef>(null);
   const furthestRef = useRef(initialPage);
+
+  useImperativeHandle(ref, () => ({
+    goToPage: (index: number) =>
+      listRef.current?.scrollToIndex({ index, animated: false }),
+  }));
 
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
@@ -71,6 +73,8 @@ const VerticalMangaReader = ({
       recycleItems
     />
   );
-};
+});
+
+VerticalMangaReader.displayName = 'VerticalMangaReader';
 
 export default VerticalMangaReader;

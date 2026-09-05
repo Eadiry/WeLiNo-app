@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { ActivityIndicator, IconButton } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import Slider from '@components/Slider/Slider';
 
 import { EmptyView, SafeAreaView } from '@components';
 import { useTheme } from '@hooks/persisted';
@@ -19,6 +21,7 @@ import VerticalMangaReader from './components/VerticalMangaReader';
 import PagedMangaReader from './components/PagedMangaReader';
 import ContinuousMangaReader from './components/ContinuousMangaReader';
 import MangaReaderModePanel from './components/MangaReaderModePanel';
+import type { MangaReaderHandle } from './components/readerHandle';
 import type { MangaChapterScreenProps } from '@navigators/types';
 
 /**
@@ -39,7 +42,7 @@ import type { MangaChapterScreenProps } from '@navigators/types';
  */
 const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
   const theme = useTheme();
-  const { top } = useSafeAreaInsets();
+  const { top, bottom } = useSafeAreaInsets();
   const [manga, setManga] = useState(route.params.manga);
   const [chapters] = useState(route.params.chapters);
   const [index, setIndex] = useState(route.params.initialIndex);
@@ -47,6 +50,8 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
   const [error, setError] = useState<string>();
   const [chromeHidden, setChromeHidden] = useState(false);
   const [modePanelVisible, setModePanelVisible] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const readerRef = useRef<MangaReaderHandle>(null);
 
   const chapter = chapters[index];
   const mangaId = 'id' in manga ? manga.id : undefined;
@@ -81,6 +86,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
   }, [plugin, manga.pluginId, chapter, updateAllTrackedManga]);
 
   useEffect(() => {
+    setCurrentPage('lastPageRead' in chapter ? chapter.lastPageRead ?? 0 : 0);
     loadChapter();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapter.path]);
@@ -117,6 +123,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
 
   const onVerticalProgress = useCallback(
     (percent: number, pageIndex: number) => {
+      setCurrentPage(pageIndex);
       if (typeof chapter.id === 'number') {
         updateMangaChapterProgress(chapter.id, percent);
         updateMangaChapterLastPageRead(chapter.id, pageIndex);
@@ -130,12 +137,18 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
 
   const onPagedChange = useCallback(
     (pageIndex: number) => {
+      setCurrentPage(pageIndex);
       if (typeof chapter.id === 'number') {
         updateMangaChapterLastPageRead(chapter.id, pageIndex);
       }
     },
     [chapter],
   );
+
+  const seekToPage = useCallback((pageIndex: number) => {
+    setCurrentPage(pageIndex);
+    readerRef.current?.goToPage(pageIndex);
+  }, []);
 
   const toggleChrome = useCallback(() => setChromeHidden(v => !v), []);
 
@@ -147,6 +160,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
       case 'pagedVertical':
         return (
           <PagedMangaReader
+            ref={readerRef}
             pages={pages}
             requestInit={imageRequestInit}
             theme={theme}
@@ -163,6 +177,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
       case 'continuousRtl':
         return (
           <ContinuousMangaReader
+            ref={readerRef}
             pages={pages}
             requestInit={imageRequestInit}
             theme={theme}
@@ -176,6 +191,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
       default:
         return (
           <VerticalMangaReader
+            ref={readerRef}
             pages={pages}
             requestInit={imageRequestInit}
             theme={theme}
@@ -248,13 +264,37 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
         </View>
       ) : null}
       {!chromeHidden ? (
-        <View style={[styles.footer, { backgroundColor: theme.surface }]}>
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: bottom, backgroundColor: theme.surface },
+          ]}
+        >
           <IconButton
             icon="chevron-left"
             iconColor={theme.onSurface}
             disabled={index <= 0}
             onPress={goPrev}
           />
+          {pages && pages.length > 1 ? (
+            <View style={styles.seekbar}>
+              <Text
+                style={[styles.pageCount, { color: theme.onSurfaceVariant }]}
+              >
+                {Math.min(currentPage + 1, pages.length)} / {pages.length}
+              </Text>
+              <Slider
+                style={styles.slider}
+                value={currentPage}
+                min={0}
+                max={pages.length - 1}
+                step={1}
+                onSlidingComplete={seekToPage}
+              />
+            </View>
+          ) : (
+            <View style={styles.seekbar} />
+          )}
           <IconButton
             icon="chevron-right"
             iconColor={theme.onSurface}
@@ -279,6 +319,7 @@ const styles = StyleSheet.create({
   chapterName: { fontSize: 12 },
   container: { flex: 1 },
   footer: {
+    alignItems: 'center',
     bottom: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -290,4 +331,7 @@ const styles = StyleSheet.create({
   headerTitles: { flex: 1 },
   loading: { flex: 1, justifyContent: 'center' },
   mangaName: { fontSize: 14, fontWeight: '600' },
+  pageCount: { fontSize: 12, marginBottom: -4, textAlign: 'center' },
+  seekbar: { flex: 1, justifyContent: 'center', paddingHorizontal: 4 },
+  slider: { width: '100%' },
 });

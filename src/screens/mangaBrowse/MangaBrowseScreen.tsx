@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   details: { flex: 1, marginStart: 16 },
   header: { alignItems: 'center', flexDirection: 'row', paddingEnd: 16 },
   headerTitle: { fontSize: 18, fontWeight: '600' },
-  icon: { borderRadius: 4, height: 44, width: 44 },
+  icon: { borderRadius: 8, height: 48, width: 48 },
   name: { fontSize: 14 },
   row: {
     alignItems: 'center',

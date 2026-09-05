@@ -31,7 +31,7 @@ import {
 import { useLiveQuery } from '@database/manager/liveQuery';
 import type { MangaSourceScreenProps } from '@navigators/types';
 
-const NUM_COLUMNS = 3;
+const NUM_COLUMNS = 2;
 const COVER_MARGIN = 4;
 
 /**

@@ -1,10 +1,17 @@
-import { useCallback, useMemo, useRef } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from 'react';
 import { useWindowDimensions } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 
 import MangaPageImage from '@components/MangaPageImage';
 import type { ImageRequestInit } from '@plugins/types';
 import type { ThemeColors } from '@theme/types';
+import type { MangaReaderHandle } from './readerHandle';
 
 interface ContinuousMangaReaderProps {
   pages: string[];
@@ -32,72 +39,90 @@ interface ContinuousMangaReaderProps {
  * `pages.length - 1 - i` when reporting progress, so `onProgress`/the
  * caller never needs to know about the reversal.
  */
-const ContinuousMangaReader = ({
-  pages,
-  requestInit,
-  theme,
-  initialPage = 0,
-  rtl = false,
-  onProgress,
-  onTap,
-}: ContinuousMangaReaderProps) => {
-  const { width } = useWindowDimensions();
-  const listRef = useRef<LegendListRef>(null);
-  const furthestRef = useRef(initialPage);
-
-  const displayPages = useMemo(
-    () => (rtl ? [...pages].reverse() : pages),
-    [pages, rtl],
-  );
-  const toOriginalIndex = useCallback(
-    (displayIndex: number) =>
-      rtl ? pages.length - 1 - displayIndex : displayIndex,
-    [rtl, pages.length],
-  );
-  const toDisplayIndex = useCallback(
-    (originalIndex: number) =>
-      rtl ? pages.length - 1 - originalIndex : originalIndex,
-    [rtl, pages.length],
-  );
-
-  const handleViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
-      const maxOriginalIndex = viewableItems.reduce((max, item) => {
-        if (item.index == null) return max;
-        return Math.max(max, toOriginalIndex(item.index));
-      }, furthestRef.current);
-      if (maxOriginalIndex > furthestRef.current) {
-        furthestRef.current = maxOriginalIndex;
-        const percent = pages.length
-          ? Math.round(((maxOriginalIndex + 1) / pages.length) * 100)
-          : 0;
-        onProgress(percent, maxOriginalIndex);
-      }
+const ContinuousMangaReader = forwardRef<
+  MangaReaderHandle,
+  ContinuousMangaReaderProps
+>(
+  (
+    {
+      pages,
+      requestInit,
+      theme,
+      initialPage = 0,
+      rtl = false,
+      onProgress,
+      onTap,
     },
-    [pages.length, onProgress, toOriginalIndex],
-  );
+    ref,
+  ) => {
+    const { width } = useWindowDimensions();
+    const listRef = useRef<LegendListRef>(null);
+    const furthestRef = useRef(initialPage);
 
-  return (
-    <LegendList
-      ref={listRef}
-      data={displayPages}
-      keyExtractor={(item, index) => `${index}-${item}`}
-      horizontal
-      initialScrollIndex={toDisplayIndex(initialPage)}
-      estimatedItemSize={width}
-      onViewableItemsChanged={handleViewableItemsChanged}
-      renderItem={({ item }) => (
-        <MangaPageImage
-          uri={item}
-          requestInit={requestInit}
-          theme={theme}
-          width={width}
-        />
-      )}
-      onTouchEnd={onTap}
-      recycleItems
-    />
-  );
-};
+    const displayPages = useMemo(
+      () => (rtl ? [...pages].reverse() : pages),
+      [pages, rtl],
+    );
+    const toOriginalIndex = useCallback(
+      (displayIndex: number) =>
+        rtl ? pages.length - 1 - displayIndex : displayIndex,
+      [rtl, pages.length],
+    );
+    const toDisplayIndex = useCallback(
+      (originalIndex: number) =>
+        rtl ? pages.length - 1 - originalIndex : originalIndex,
+      [rtl, pages.length],
+    );
+
+    useImperativeHandle(ref, () => ({
+      goToPage: (index: number) =>
+        listRef.current?.scrollToIndex({
+          index: toDisplayIndex(index),
+          animated: false,
+        }),
+    }));
+
+    const handleViewableItemsChanged = useCallback(
+      ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
+        const maxOriginalIndex = viewableItems.reduce((max, item) => {
+          if (item.index == null) return max;
+          return Math.max(max, toOriginalIndex(item.index));
+        }, furthestRef.current);
+        if (maxOriginalIndex > furthestRef.current) {
+          furthestRef.current = maxOriginalIndex;
+          const percent = pages.length
+            ? Math.round(((maxOriginalIndex + 1) / pages.length) * 100)
+            : 0;
+          onProgress(percent, maxOriginalIndex);
+        }
+      },
+      [pages.length, onProgress, toOriginalIndex],
+    );
+
+    return (
+      <LegendList
+        ref={listRef}
+        data={displayPages}
+        keyExtractor={(item, index) => `${index}-${item}`}
+        horizontal
+        initialScrollIndex={toDisplayIndex(initialPage)}
+        estimatedItemSize={width}
+        onViewableItemsChanged={handleViewableItemsChanged}
+        renderItem={({ item }) => (
+          <MangaPageImage
+            uri={item}
+            requestInit={requestInit}
+            theme={theme}
+            width={width}
+          />
+        )}
+        onTouchEnd={onTap}
+        recycleItems
+      />
+    );
+  },
+);
+
+ContinuousMangaReader.displayName = 'ContinuousMangaReader';
 
 export default ContinuousMangaReader;
