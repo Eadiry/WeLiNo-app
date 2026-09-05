@@ -9,6 +9,7 @@ import m0005 from './20260901120000_add_voice_repository/migration.sql';
 import m0006 from './20260903000000_add_name_substitution/migration.sql';
 import m0007 from './20260904000000_add_manga/migration.sql';
 import m0008 from './20260904010000_add_manga_repository_format/migration.sql';
+import m0009 from './20260905010000_widen_manga_reader_mode/migration.sql';
 
 export default {
   migrations: {
@@ -21,5 +22,6 @@ export default {
     '20260903000000_add_name_substitution': m0006,
     '20260904000000_add_manga': m0007,
     '20260904010000_add_manga_repository_format': m0008,
+    '20260905010000_widen_manga_reader_mode': m0009,
   },
 };

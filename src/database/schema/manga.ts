@@ -28,10 +28,28 @@ export const manga = sqliteTable(
     totalChapters: integer('totalChapters').default(0),
     lastReadAt: text('lastReadAt'),
     lastUpdatedAt: text('lastUpdatedAt'),
-    /** Per-series reader UI, switchable from the series screen. */
-    readerMode: text('readerMode', { enum: ['paged', 'vertical'] })
+    /**
+     * Per-series reader UI, switchable from the series screen.
+     * `continuousVertical` is the original "vertical" mode, kept as the
+     * default so existing libraries don't change behavior; `pagedLtr` is
+     * the original "paged" mode. Widened from a 2-value union to 5 in
+     * migration `20260905010000_widen_manga_reader_mode` (a data rename
+     * only — this column is plain `text` with no SQL-level CHECK
+     * constraint, so widening the TS union alone would have worked, but
+     * renaming the stored values keeps them self-descriptive going
+     * forward instead of carrying a permanent `'vertical'` alias).
+     */
+    readerMode: text('readerMode', {
+      enum: [
+        'pagedLtr',
+        'pagedRtl',
+        'continuousVertical',
+        'continuousLtr',
+        'continuousRtl',
+      ],
+    })
       .notNull()
-      .default('vertical'),
+      .default('continuousVertical'),
   },
   table => [
     uniqueIndex('manga_path_plugin_unique').on(table.path, table.pluginId),

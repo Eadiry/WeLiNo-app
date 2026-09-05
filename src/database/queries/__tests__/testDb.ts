@@ -121,7 +121,7 @@ const MIGRATION_STATEMENTS = [
 	totalChapters integer DEFAULT 0,
 	lastReadAt text,
 	lastUpdatedAt text,
-	readerMode text DEFAULT 'vertical' NOT NULL
+	readerMode text DEFAULT 'continuousVertical' NOT NULL
 )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS manga_path_plugin_unique ON Manga (path, pluginId)`,
   `CREATE INDEX IF NOT EXISTS MangaIndex ON Manga (pluginId, path, id, inLibrary)`,

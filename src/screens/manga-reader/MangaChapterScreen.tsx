@@ -17,6 +17,8 @@ import {
 } from '@database/queries/MangaChapterQueries';
 import VerticalMangaReader from './components/VerticalMangaReader';
 import PagedMangaReader from './components/PagedMangaReader';
+import ContinuousMangaReader from './components/ContinuousMangaReader';
+import MangaReaderModePanel from './components/MangaReaderModePanel';
 import type { MangaChapterScreenProps } from '@navigators/types';
 
 /**
@@ -44,11 +46,12 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
   const [pages, setPages] = useState<string[]>();
   const [error, setError] = useState<string>();
   const [chromeHidden, setChromeHidden] = useState(false);
+  const [modePanelVisible, setModePanelVisible] = useState(false);
 
   const chapter = chapters[index];
   const mangaId = 'id' in manga ? manga.id : undefined;
   const readerMode: MangaRow['readerMode'] =
-    'readerMode' in manga ? manga.readerMode : 'vertical';
+    'readerMode' in manga ? manga.readerMode : 'continuousVertical';
 
   const plugin = getMangaPlugin(manga.pluginId);
   const { updateAllTrackedManga } = useTrackedManga(mangaId ?? 'NO_ID');
@@ -90,20 +93,23 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
     setIndex(i => Math.max(i - 1, 0));
   }, []);
 
-  const toggleReaderMode = useCallback(async () => {
-    const mode = readerMode === 'paged' ? 'vertical' : 'paged';
-    if (mangaId !== undefined) {
-      await dbManager.write(async tx => {
-        tx.update(mangaSchema)
-          .set({ readerMode: mode })
-          .where(eq(mangaSchema.id, mangaId))
-          .run();
-      });
-    }
-    setManga(prev =>
-      'readerMode' in prev ? { ...prev, readerMode: mode } : prev,
-    );
-  }, [mangaId, readerMode]);
+  const setReaderMode = useCallback(
+    async (mode: MangaRow['readerMode']) => {
+      if (mangaId !== undefined) {
+        await dbManager.write(async tx => {
+          tx.update(mangaSchema)
+            .set({ readerMode: mode })
+            .where(eq(mangaSchema.id, mangaId))
+            .run();
+        });
+      }
+      setManga(prev =>
+        'readerMode' in prev ? { ...prev, readerMode: mode } : prev,
+      );
+      setModePanelVisible(false);
+    },
+    [mangaId],
+  );
 
   const imageRequestInit = plugin?.imageRequestInit;
   const lastPageRead =
@@ -135,25 +141,46 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
 
   const reader = useMemo(() => {
     if (!pages) return null;
-    return readerMode === 'paged' ? (
-      <PagedMangaReader
-        pages={pages}
-        requestInit={imageRequestInit}
-        theme={theme}
-        initialPage={lastPageRead}
-        onPageChange={onPagedChange}
-        onTap={toggleChrome}
-      />
-    ) : (
-      <VerticalMangaReader
-        pages={pages}
-        requestInit={imageRequestInit}
-        theme={theme}
-        initialPage={lastPageRead}
-        onProgress={onVerticalProgress}
-        onTap={toggleChrome}
-      />
-    );
+    switch (readerMode) {
+      case 'pagedLtr':
+      case 'pagedRtl':
+        return (
+          <PagedMangaReader
+            pages={pages}
+            requestInit={imageRequestInit}
+            theme={theme}
+            initialPage={lastPageRead}
+            rtl={readerMode === 'pagedRtl'}
+            onPageChange={onPagedChange}
+            onTap={toggleChrome}
+          />
+        );
+      case 'continuousLtr':
+      case 'continuousRtl':
+        return (
+          <ContinuousMangaReader
+            pages={pages}
+            requestInit={imageRequestInit}
+            theme={theme}
+            initialPage={lastPageRead}
+            rtl={readerMode === 'continuousRtl'}
+            onProgress={onVerticalProgress}
+            onTap={toggleChrome}
+          />
+        );
+      case 'continuousVertical':
+      default:
+        return (
+          <VerticalMangaReader
+            pages={pages}
+            requestInit={imageRequestInit}
+            theme={theme}
+            initialPage={lastPageRead}
+            onProgress={onVerticalProgress}
+            onTap={toggleChrome}
+          />
+        );
+    }
   }, [
     pages,
     readerMode,
@@ -210,13 +237,9 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
             </Text>
           </View>
           <IconButton
-            icon={
-              readerMode === 'paged'
-                ? 'book-open-page-variant-outline'
-                : 'file-image-outline'
-            }
+            icon="book-cog-outline"
             iconColor={theme.onSurface}
-            onPress={toggleReaderMode}
+            onPress={() => setModePanelVisible(true)}
           />
         </View>
       ) : null}
@@ -236,6 +259,12 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
           />
         </View>
       ) : null}
+      <MangaReaderModePanel
+        visible={modePanelVisible}
+        onDismiss={() => setModePanelVisible(false)}
+        value={readerMode}
+        onChange={setReaderMode}
+      />
     </View>
   );
 };

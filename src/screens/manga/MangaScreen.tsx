@@ -3,10 +3,11 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActivityIndicator, Button } from 'react-native-paper';
 import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 
-import { EmptyView, SafeAreaView, SegmentedControl } from '@components';
+import { EmptyView, SafeAreaView } from '@components';
 import NovelCoverImage from '@components/NovelCoverImage';
 import { useTheme } from '@hooks/persisted';
 import MangaTrackSheet from './components/MangaTrackSheet';
+import MangaReaderModePanel from '@screens/manga-reader/components/MangaReaderModePanel';
 
 import { dbManager } from '@database/db';
 import { mangaSchema, type MangaRow } from '@database/schema';
@@ -20,6 +21,14 @@ import { getMangaPlugin } from '@plugins/mangaPluginManager';
 import type { SourceManga } from '@plugins/types/manga';
 import { eq } from 'drizzle-orm';
 import type { DisplayMangaChapter, MangaScreenProps } from '@navigators/types';
+
+const READER_MODE_LABELS: Record<MangaRow['readerMode'], string> = {
+  pagedLtr: 'Paged (left to right)',
+  pagedRtl: 'Paged (right to left)',
+  continuousVertical: 'Continuous vertical (webtoon)',
+  continuousLtr: 'Continuous (left to right)',
+  continuousRtl: 'Continuous (right to left)',
+};
 
 /**
  * Manga's `NovelScreen.tsx`/`NovelContext.tsx` mirror — deliberately a plain
@@ -53,6 +62,7 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
   const [chapters, setChapters] = useState<DisplayMangaChapter[]>([]);
   const [busy, setBusy] = useState(false);
   const trackSheetRef = useRef<BottomSheetModalMethods | null>(null);
+  const [modePanelVisible, setModePanelVisible] = useState(false);
 
   const plugin = getMangaPlugin(pluginId);
 
@@ -200,15 +210,9 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
             >
               Reader mode
             </Text>
-            <SegmentedControl<'paged' | 'vertical'>
-              options={[
-                { value: 'vertical', label: 'Vertical (manhua/manhwa)' },
-                { value: 'paged', label: 'Paged (manga)' },
-              ]}
-              value={dbManga.readerMode}
-              onChange={setReaderMode}
-              theme={theme}
-            />
+            <Button mode="outlined" onPress={() => setModePanelVisible(true)}>
+              {READER_MODE_LABELS[dbManga.readerMode]}
+            </Button>
           </View>
         ) : null}
 
@@ -243,6 +247,17 @@ const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
           bottomSheetRef={trackSheetRef}
           mangaId={dbManga.id}
           mangaName={dbManga.name}
+        />
+      ) : null}
+      {dbManga ? (
+        <MangaReaderModePanel
+          visible={modePanelVisible}
+          onDismiss={() => setModePanelVisible(false)}
+          value={dbManga.readerMode}
+          onChange={mode => {
+            setReaderMode(mode);
+            setModePanelVisible(false);
+          }}
         />
       ) : null}
     </SafeAreaView>
