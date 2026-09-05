@@ -155,7 +155,8 @@ const MIGRATION_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS MangaRepository (
 	id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	url text NOT NULL,
-	enabled integer DEFAULT true NOT NULL
+	enabled integer DEFAULT true NOT NULL,
+	format text DEFAULT 'native' NOT NULL
 )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS manga_repository_url_unique ON MangaRepository (url)`,
 ];
