@@ -85,12 +85,11 @@ describe('loadPaperbackPlugin', () => {
     expect(plugin).toBeUndefined();
   });
 
-  it('falls through to the legacy adapter for an older-generation bundle', async () => {
-    // A minimal real v1-convention bundle (Browserify UMD, bare globals —
-    // see paperbackLegacyAdapter.test.ts for the fuller fixture/rationale).
-    // Doesn't match the 0.9 `var source = (...)({})` convention at all, so
-    // this only passes if loadPaperbackPlugin actually falls through rather
-    // than just returning undefined from the first attempt.
+  it('returns undefined for an older-generation (non-0.9) bundle', () => {
+    // A minimal real v1-convention bundle (Browserify UMD, bare globals).
+    // Doesn't match the 0.9 `var source = (...)({})` convention at all —
+    // v1/0.8 bundle-format support has been removed entirely, so this must
+    // fail to load rather than falling through to any legacy handling.
     const legacyBundle = `
       (function(f){
         if (typeof exports === "object" && typeof module !== "undefined") { module.exports = f(); }
@@ -108,9 +107,7 @@ describe('loadPaperbackPlugin', () => {
     `;
 
     const plugin = loadPaperbackPlugin('LegacySource', legacyBundle);
-    expect(plugin).toBeDefined();
-    const manga = await plugin!.parseManga('m1');
-    expect(manga.name).toBe('Legacy Manga');
+    expect(plugin).toBeUndefined();
   });
 
   it('popularManga uses a discover section rather than a blank-query search, matching a real source that treats blank search as "no results"', async () => {

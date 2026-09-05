@@ -2,7 +2,6 @@ import {
   createPaperbackApplication,
   type PaperbackApplicationInternal,
 } from './helpers/paperbackApplication';
-import { loadPaperbackLegacySource } from './paperbackLegacyAdapter';
 import {
   MangaStatus,
   type MangaChapterItem,
@@ -113,13 +112,10 @@ const evalPaperbackBundle = (
 };
 
 /**
- * Tries the current (0.9) `Application`-global format first; if that
- * doesn't yield a working extension for `pluginId`, falls through to
- * `paperbackLegacyAdapter.ts` on the *same* fetched code — a content-based
- * fallback (same spirit as the CMS-template detector's `detect()`) rather
- * than a format flag the repository metadata or the user has to get right.
- * Real repos ship one format or the other; trying both costs nothing when
- * the first attempt fails cleanly.
+ * Loads a compiled 0.9-format Paperback/Inkdex bundle. Older v1/0.8
+ * bundle-format support has been removed — every known repository this app
+ * suggests (see `knownPaperbackRepositories.ts`) is confirmed to publish a
+ * genuine 0.9-toolchain bundle.
  */
 export const loadPaperbackPlugin = (
   pluginId: string,
@@ -133,17 +129,12 @@ export const loadPaperbackPlugin = (
       return wrapPaperbackExtension(pluginId, extension, application);
     }
   } catch (error) {
-    // Not silent: a bundle that loads but is the wrong API generation (a
-    // real, confirmed failure mode — see knownPaperbackRepositories.ts)
-    // throws here, and swallowing it looks identical to "not a Paperback
-    // bundle at all" from the caller's side. Loud in dev; still falls
-    // through to the legacy attempt below either way.
     if (__DEV__) {
       // eslint-disable-next-line no-console
       console.warn(`[paperbackAdapter] failed to load "${pluginId}":`, error);
     }
   }
-  return loadPaperbackLegacySource(pluginId, code);
+  return undefined;
 };
 
 const mapStatus = (status?: string): MangaStatus => {

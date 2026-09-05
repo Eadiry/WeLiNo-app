@@ -178,29 +178,26 @@ describe('installTemplateMangaPlugin', () => {
 });
 
 describe('installMangaPlugin — Paperback filename fallback', () => {
-  it('retries with source.js when index.js is not a loadable bundle (the real 0.8-repo shape)', async () => {
-    // A minimal real v1-convention bundle — see paperbackLegacyAdapter.test.ts
-    // for the fuller fixture/rationale. Its constructor never touches
-    // cheerio, so the mocked `cheerio.load` stub in this file is fine.
-    const legacyBundle = `
-      (function(f){
-        if (typeof exports === "object" && typeof module !== "undefined") { module.exports = f(); }
-      })(function(){
-        class LegacySource {
-          constructor(cheerio) { this.cheerio = cheerio; }
+  it('retries with source.js when index.js is not a loadable bundle', async () => {
+    // A minimal real 0.9-convention bundle (`Application`-global IIFE
+    // assigning `source`), served under the alternate `source.js` filename
+    // some repos use instead of `index.js`.
+    const bundle = `
+      var source = (function(e){
+        class AltSource {
           async getMangaDetails(mangaId) {
-            return { titles: ['Legacy Manga'], image: 'https://example.com/legacy.jpg', status: 1 };
+            return { titles: ['Alt Manga'], image: 'https://example.com/alt.jpg', status: 1 };
           }
           async getChapters(mangaId) { return []; }
           async getChapterDetails(mangaId, chapterId) { return { id: chapterId, mangaId, pages: [], longStrip: false }; }
         }
-        return { LegacySource: LegacySource };
-      });
+        return e.AltSource = new AltSource(), e;
+      })({});
     `;
     const plugin = {
-      id: 'LegacySource',
-      name: 'Legacy Source',
-      url: 'https://example.com/repo/LegacySource/index.js',
+      id: 'AltSource',
+      name: 'Alt Source',
+      url: 'https://example.com/repo/AltSource/index.js',
       format: 'paperback',
     } as PluginItem & { format: 'paperback' };
 
@@ -211,7 +208,7 @@ describe('installMangaPlugin — Paperback filename fallback', () => {
           ({ text: async () => '<!DOCTYPE html>not found' } as Response),
       )
       .mockImplementationOnce(
-        async () => ({ text: async () => legacyBundle } as Response),
+        async () => ({ text: async () => bundle } as Response),
       );
 
     const installed = await installMangaPlugin(plugin);
@@ -221,14 +218,14 @@ describe('installMangaPlugin — Paperback filename fallback', () => {
     // absolute call position isn't reliable here, only that both URLs were
     // requested somewhere.
     expect(fetchSpy).toHaveBeenCalledWith(
-      'https://example.com/repo/LegacySource/index.js',
+      'https://example.com/repo/AltSource/index.js',
       expect.anything(),
     );
     expect(fetchSpy).toHaveBeenCalledWith(
-      'https://example.com/repo/LegacySource/source.js',
+      'https://example.com/repo/AltSource/source.js',
       expect.anything(),
     );
-    expect(installed).toMatchObject({ id: 'LegacySource' });
+    expect(installed).toMatchObject({ id: 'AltSource' });
     fetchSpy.mockRestore();
   });
 });
@@ -245,17 +242,14 @@ describe('installMangaPlugin — Paperback metadata overlay', () => {
     // update never did anything ('0.0.0' never compares as newer than
     // '0.0.0').
     const bundle = `
-      (function(f){
-        if (typeof exports === "object" && typeof module !== "undefined") { module.exports = f(); }
-      })(function(){
+      var source = (function(e){
         class MetaSource {
-          constructor(cheerio) { this.cheerio = cheerio; }
           async getMangaDetails(mangaId) { return { titles: ['M'], image: 'https://example.com/m.jpg', status: 1 }; }
           async getChapters(mangaId) { return []; }
           async getChapterDetails(mangaId, chapterId) { return { id: chapterId, mangaId, pages: [], longStrip: false }; }
         }
-        return { MetaSource: MetaSource };
-      });
+        return e.MetaSource = new MetaSource(), e;
+      })({});
     `;
     jest.spyOn(global, 'fetch').mockResolvedValue({
       text: async () => bundle,

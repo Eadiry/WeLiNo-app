@@ -38,13 +38,11 @@ import type { ThemeColors } from '@theme/types';
 /**
  * `fetchPaperbackRepositoryPlugins` builds every icon URL assuming the
  * current (0.9) repo layout — `<id>/static/<icon>` — confirmed correct for
- * the main Inkdex registry. The older v1/0.8 repos it now also supports
- * (`paperbackLegacyAdapter.ts`) serve icons one path segment over instead —
- * `<id>/includes/<icon>` — confirmed against real NMN's/GameFuzzy's/
- * Netsky's repos. Which convention a given repo uses isn't knowable from
- * `versioning.json` alone (that's the same "discover the format from the
- * actual bundle content" situation `loadPaperbackPlugin` is already in), so
- * fall back client-side on a load failure rather than guess ahead of time.
+ * the main Inkdex registry. Some 0.9 repos serve icons one path segment
+ * over instead — `<id>/includes/<icon>` — confirmed against real
+ * NMN's/GameFuzzy's/Netsky's repos. Which convention a given repo uses
+ * isn't knowable from `versioning.json` alone, so fall back client-side on
+ * a load failure rather than guess ahead of time.
  */
 const withIncludesIconFallback = (uri: string) =>
   uri.includes('/static/') ? uri.replace('/static/', '/includes/') : undefined;
