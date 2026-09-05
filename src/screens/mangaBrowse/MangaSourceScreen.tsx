@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   ListRenderItemInfo,
+  Pressable,
   StyleSheet,
+  Text,
+  View,
   useWindowDimensions,
 } from 'react-native';
-import { ActivityIndicator, FAB } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator } from 'react-native-paper';
+import Icon from '@react-native-vector-icons/material-design-icons';
 import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 
 import {
@@ -19,7 +22,6 @@ import MangaCover from '@components/MangaCover';
 import FilterBottomSheet from '@screens/BrowseSourceScreen/components/FilterBottomSheet';
 import { useSearch } from '@hooks';
 import { useTheme } from '@hooks/persisted';
-import { getString } from '@i18n/translations';
 
 import { getMangaPlugin } from '@plugins/mangaPluginManager';
 import type { MangaSourceItem } from '@plugins/types/manga';
@@ -56,9 +58,9 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
   const [hasNextPage, setHasNextPage] = useState(true);
   const [error, setError] = useState<string>();
   const { searchText, setSearchText, clearSearchbar } = useSearch();
+  const [latest, setLatest] = useState(false);
   const inFlightRef = useRef(false);
   const filterSheetRef = useRef<BottomSheetModalMethods | null>(null);
-  const { bottom, right } = useSafeAreaInsets();
 
   // `plugin.filters` is populated asynchronously (a real source's
   // `getSearchTags()` is a network call — see `paperbackAdapter.ts`), so
@@ -76,7 +78,12 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
   const libraryPaths = new Set(library.map(m => m.path));
 
   const load = useCallback(
-    async (pageNo: number, term: string, filters?: FilterToValues<Filters>) => {
+    async (
+      pageNo: number,
+      term: string,
+      filters?: FilterToValues<Filters>,
+      showLatest?: boolean,
+    ) => {
       if (!plugin || inFlightRef.current) return;
       inFlightRef.current = true;
       setIsLoading(true);
@@ -84,7 +91,10 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
       try {
         const res = term
           ? await plugin.searchManga(term, pageNo)
-          : await plugin.popularManga(pageNo, { filters });
+          : await plugin.popularManga(pageNo, {
+              filters,
+              showLatestManga: showLatest,
+            });
         setItems(prev => (pageNo === 1 ? res : [...prev, ...res]));
         setHasNextPage(res.length > 0);
         setFilterValues(plugin.filters);
@@ -98,30 +108,34 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
     [plugin],
   );
 
+  const reload = useCallback(
+    (showLatest: boolean, filters?: FilterToValues<Filters>) => {
+      setPage(1);
+      setItems([]);
+      setHasNextPage(true);
+      load(1, searchText.trim(), filters ?? selectedFilters, showLatest);
+    },
+    [load, searchText, selectedFilters],
+  );
+
   useEffect(() => {
-    setPage(1);
-    setItems([]);
-    setHasNextPage(true);
-    load(1, searchText.trim(), selectedFilters);
+    reload(latest);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchText]);
+  }, [searchText, latest]);
 
   const loadMore = useCallback(() => {
     if (isLoading || !hasNextPage) return;
     const next = page + 1;
     setPage(next);
-    load(next, searchText.trim(), selectedFilters);
-  }, [isLoading, hasNextPage, page, load, searchText, selectedFilters]);
+    load(next, searchText.trim(), selectedFilters, latest);
+  }, [isLoading, hasNextPage, page, load, searchText, selectedFilters, latest]);
 
   const setFilters = useCallback(
     (filters?: FilterToValues<Filters>) => {
       setSelectedFilters(filters);
-      setPage(1);
-      setItems([]);
-      setHasNextPage(true);
-      load(1, searchText.trim(), filters);
+      reload(latest, filters);
     },
-    [load, searchText],
+    [reload, latest],
   );
 
   // Matches the novel side's `useBrowseSource.clearFilters`: resets the
@@ -174,6 +188,32 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
         handleBackAction={navigation.goBack}
         theme={theme}
       />
+      {!searchText ? (
+        <View style={styles.pillRow}>
+          <Pill
+            label="Popular"
+            icon="heart-outline"
+            active={!latest}
+            theme={theme}
+            onPress={() => setLatest(false)}
+          />
+          <Pill
+            label="Latest"
+            icon="clock-outline"
+            active={latest}
+            theme={theme}
+            onPress={() => setLatest(true)}
+          />
+          {filterValues ? (
+            <Pill
+              label="Filter"
+              icon="filter-variant"
+              theme={theme}
+              onPress={() => filterSheetRef?.current?.present()}
+            />
+          ) : null}
+        </View>
+      ) : null}
       {!plugin ? (
         <ErrorScreenV2 error={`Plugin ${pluginId} is not loaded.`} />
       ) : error && items.length === 0 ? (
@@ -183,7 +223,7 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
             {
               iconName: 'refresh',
               title: 'Retry',
-              onPress: () => load(1, searchText.trim(), selectedFilters),
+              onPress: () => reload(latest),
             },
           ]}
         />
@@ -207,41 +247,75 @@ const MangaSourceScreen = ({ route, navigation }: MangaSourceScreenProps) => {
         />
       )}
       {filterValues && !searchText ? (
-        <>
-          <FAB
-            icon="filter-variant"
-            style={[
-              styles.filterFab,
-              {
-                backgroundColor: theme.primary,
-                marginBottom: bottom + 16,
-                marginEnd: right + 16,
-              },
-            ]}
-            label={getString('common.filter')}
-            uppercase={false}
-            color={theme.onPrimary}
-            onPress={() => filterSheetRef?.current?.present()}
-          />
-          <FilterBottomSheet
-            filterSheetRef={filterSheetRef}
-            filters={filterValues}
-            setFilters={setFilters}
-            clearFilters={clearFilters}
-          />
-        </>
+        <FilterBottomSheet
+          filterSheetRef={filterSheetRef}
+          filters={filterValues}
+          setFilters={setFilters}
+          clearFilters={clearFilters}
+        />
       ) : null}
     </SafeAreaView>
   );
 };
 
+const Pill = ({
+  label,
+  icon,
+  active,
+  theme,
+  onPress,
+}: {
+  label: string;
+  icon: string;
+  active?: boolean;
+  theme: ReturnType<typeof useTheme>;
+  onPress: () => void;
+}) => (
+  <Pressable
+    onPress={onPress}
+    android_ripple={{ color: theme.rippleColor }}
+    style={[
+      styles.pill,
+      {
+        borderColor: active ? theme.primary : theme.outline,
+        backgroundColor: active ? theme.primaryContainer : 'transparent',
+      },
+    ]}
+  >
+    <Icon
+      name={icon as never}
+      size={16}
+      color={active ? theme.primary : theme.onSurfaceVariant}
+    />
+    <Text
+      style={[
+        styles.pillLabel,
+        { color: active ? theme.primary : theme.onSurfaceVariant },
+      ]}
+    >
+      {label}
+    </Text>
+  </Pressable>
+);
+
 export default MangaSourceScreen;
 
 const styles = StyleSheet.create({
-  filterFab: {
-    bottom: 0,
-    margin: 16,
-    position: 'absolute',
-    right: 0,
+  pill: {
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  pillLabel: { fontSize: 13, fontWeight: '600' },
+  pillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingTop: 4,
   },
 });

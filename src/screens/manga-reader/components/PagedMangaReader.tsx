@@ -131,6 +131,8 @@ interface PagedMangaReaderProps {
   rtl?: boolean;
   /** `'vertical'` flips page-to-page navigation to swipe up/down instead of left/right — `react-native-pager-view` supports this natively via its own `orientation` prop, independent of `rtl` (which has no meaning for a vertical pager). */
   orientation?: 'horizontal' | 'vertical';
+  /** Horizontal page inset as a fraction of screen width per side (0–0.25). */
+  sidePadding?: number;
   onPageChange: (pageIndex: number) => void;
   onTap?: () => void;
 }
@@ -150,12 +152,14 @@ const PagedMangaReader = forwardRef<MangaReaderHandle, PagedMangaReaderProps>(
       initialPage = 0,
       rtl = false,
       orientation = 'horizontal',
+      sidePadding = 0,
       onPageChange,
       onTap,
     },
     ref,
   ) => {
     const { width, height } = useWindowDimensions();
+    const pageWidth = width * (1 - sidePadding * 2);
     const [current, setCurrent] = useState(initialPage);
     const pagerRef = useRef<PagerView>(null);
 
@@ -183,7 +187,7 @@ const PagedMangaReader = forwardRef<MangaReaderHandle, PagedMangaReaderProps>(
                 uri={uri}
                 requestInit={requestInit}
                 theme={theme}
-                width={width}
+                width={pageWidth}
                 height={height}
                 onTap={onTap}
               />

@@ -127,6 +127,18 @@ export const markMangaChapterRead = async (chapterId: number) => {
   });
 };
 
+export const setMangaChapterBookmark = async (
+  chapterId: number,
+  bookmark: boolean,
+) => {
+  await dbManager.write(async tx => {
+    tx.update(mangaChapterSchema)
+      .set({ bookmark })
+      .where(eq(mangaChapterSchema.id, chapterId))
+      .run();
+  });
+};
+
 /** Paged-mode progress ("which page") — see `mangaChapter.ts`'s field comment for why this is separate from `progress` (the vertical reader's scroll-%). */
 export const updateMangaChapterLastPageRead = async (
   chapterId: number,

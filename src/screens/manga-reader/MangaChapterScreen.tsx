@@ -2,55 +2,57 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { ActivityIndicator, IconButton } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import color from 'color';
 
 import Slider from '@components/Slider/Slider';
-
 import { EmptyView, SafeAreaView } from '@components';
 import { useTheme } from '@hooks/persisted';
+import { useMangaReaderSettings } from '@hooks/persisted/useMangaReaderSettings';
 import { useTrackedManga } from '@hooks/persisted/useTrackedManga';
+import { isUrlAbsolute } from '@plugins/helpers/isAbsoluteUrl';
 import { getMangaPlugin } from '@plugins/mangaPluginManager';
 import { dbManager } from '@database/db';
 import { mangaSchema, type MangaRow } from '@database/schema';
 import { eq } from 'drizzle-orm';
 import {
   markMangaChapterRead,
+  setMangaChapterBookmark,
   updateMangaChapterLastPageRead,
   updateMangaChapterProgress,
 } from '@database/queries/MangaChapterQueries';
 import VerticalMangaReader from './components/VerticalMangaReader';
 import PagedMangaReader from './components/PagedMangaReader';
 import ContinuousMangaReader from './components/ContinuousMangaReader';
-import MangaReaderModePanel from './components/MangaReaderModePanel';
+import MangaReaderSettingsSheet from './components/MangaReaderSettingsSheet';
 import type { MangaReaderHandle } from './components/readerHandle';
 import type { MangaChapterScreenProps } from '@navigators/types';
 
 /**
- * Manga's `ReaderScreen.tsx` equivalent — much simpler, since there's no
- * WebView/TTS/injected-JS machinery to coordinate, just "fetch a page list,
- * hand it to whichever reader component `manga.readerMode` picks." Chrome
- * (title + reader-mode toggle) hides on tap, same convention as the novel
- * reader's `ReaderChromeHiddenContext`, but as plain local state — there's
- * no second consumer that would need it split out into its own context yet.
+ * Manga's `ReaderScreen.tsx` equivalent. Chrome hides on tap (plain local
+ * state — no second consumer needs a context split yet). Prev/next moves
+ * through the `chapters` array the route was given, so it works whether or
+ * not the manga is in the library; progress/read-state/bookmark writes are
+ * the only thing gated on a real `MangaChapter` row
+ * (`typeof chapter.id === 'number'`).
  *
- * Prev/next navigation moves through the `chapters` array the route was
- * given rather than querying the DB — works identically whether or not the
- * manga is in the library. Progress/read-state persistence is the only
- * thing that's conditional: it only writes when the current chapter has a
- * numeric `id` (a real `MangaChapter` row exists), which is exactly the
- * "added to library" case. A not-yet-added manga is still fully readable;
- * it just doesn't remember where you left off.
+ * The bottom chrome follows the reference reader (and the novel
+ * `ReaderFooter.tsx`): a page-seekbar row (skip-chapter circles flanking a
+ * dotted slider + page count) above an action toolbar (bookmark / reading
+ * mode / settings).
  */
 const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
   const theme = useTheme();
   const { top, bottom } = useSafeAreaInsets();
+  const { sidePadding, setMangaReaderSettings } = useMangaReaderSettings();
   const [manga, setManga] = useState(route.params.manga);
   const [chapters] = useState(route.params.chapters);
   const [index, setIndex] = useState(route.params.initialIndex);
   const [pages, setPages] = useState<string[]>();
   const [error, setError] = useState<string>();
   const [chromeHidden, setChromeHidden] = useState(false);
-  const [modePanelVisible, setModePanelVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
   const readerRef = useRef<MangaReaderHandle>(null);
 
   const chapter = chapters[index];
@@ -60,6 +62,16 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
 
   const plugin = getMangaPlugin(manga.pluginId);
   const { updateAllTrackedManga } = useTrackedManga(mangaId ?? 'NO_ID');
+
+  const webUrl = useMemo(() => {
+    if (isUrlAbsolute(manga.pluginId)) return undefined;
+    if (isUrlAbsolute(chapter.path)) return chapter.path;
+    const site = plugin?.site;
+    if (site && isUrlAbsolute(site)) {
+      return `${site.replace(/\/$/, '')}/${chapter.path.replace(/^\//, '')}`;
+    }
+    return undefined;
+  }, [chapter.path, manga.pluginId, plugin?.site]);
 
   const loadChapter = useCallback(async () => {
     setPages(undefined);
@@ -73,10 +85,6 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
       if (typeof chapter.id === 'number') {
         markMangaChapterRead(chapter.id);
       }
-      // Manga has no scroll-percentage concept to gate on (unlike the
-      // novel reader's `useChapter.ts`'s 97%-read threshold) — a chapter
-      // is either being read or it isn't, so push progress to any
-      // authenticated tracker as soon as it loads.
       if (typeof chapter.chapterNumber === 'number') {
         updateAllTrackedManga({ progress: chapter.chapterNumber });
       }
@@ -112,7 +120,6 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
       setManga(prev =>
         'readerMode' in prev ? { ...prev, readerMode: mode } : prev,
       );
-      setModePanelVisible(false);
     },
     [mangaId],
   );
@@ -120,6 +127,19 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
   const imageRequestInit = plugin?.imageRequestInit;
   const lastPageRead =
     'lastPageRead' in chapter ? chapter.lastPageRead ?? 0 : 0;
+
+  const chapterKey = String(chapter.id);
+  const bookmarked =
+    bookmarks[chapterKey] ??
+    ('bookmark' in chapter && chapter.bookmark === true);
+
+  const toggleBookmark = useCallback(() => {
+    const next = !bookmarked;
+    setBookmarks(prev => ({ ...prev, [chapterKey]: next }));
+    if (typeof chapter.id === 'number') {
+      setMangaChapterBookmark(chapter.id, next);
+    }
+  }, [bookmarked, chapterKey, chapter.id]);
 
   const onVerticalProgress = useCallback(
     (percent: number, pageIndex: number) => {
@@ -152,6 +172,15 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
 
   const toggleChrome = useCallback(() => setChromeHidden(v => !v), []);
 
+  const openWebView = useCallback(() => {
+    if (!webUrl) return;
+    navigation.navigate('WebviewScreen', {
+      name: manga.name,
+      url: webUrl,
+      pluginId: manga.pluginId,
+    });
+  }, [webUrl, manga.name, manga.pluginId, navigation]);
+
   const reader = useMemo(() => {
     if (!pages) return null;
     switch (readerMode) {
@@ -169,6 +198,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
             orientation={
               readerMode === 'pagedVertical' ? 'vertical' : 'horizontal'
             }
+            sidePadding={sidePadding}
             onPageChange={onPagedChange}
             onTap={toggleChrome}
           />
@@ -183,6 +213,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
             theme={theme}
             initialPage={lastPageRead}
             rtl={readerMode === 'continuousRtl'}
+            sidePadding={sidePadding}
             onProgress={onVerticalProgress}
             onTap={toggleChrome}
           />
@@ -196,6 +227,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
             requestInit={imageRequestInit}
             theme={theme}
             initialPage={lastPageRead}
+            sidePadding={sidePadding}
             onProgress={onVerticalProgress}
             onTap={toggleChrome}
           />
@@ -207,10 +239,13 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
     imageRequestInit,
     theme,
     lastPageRead,
+    sidePadding,
     onPagedChange,
     onVerticalProgress,
     toggleChrome,
   ]);
+
+  const pillBg = color(theme.surface).alpha(0.95).string();
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -230,6 +265,7 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
       ) : (
         reader
       )}
+
       {!chromeHidden ? (
         <View
           style={[
@@ -256,58 +292,90 @@ const MangaChapterScreen = ({ route, navigation }: MangaChapterScreenProps) => {
               {chapter.name}
             </Text>
           </View>
+          {webUrl ? (
+            <IconButton
+              icon="earth"
+              iconColor={theme.onSurface}
+              onPress={openWebView}
+            />
+          ) : null}
           <IconButton
-            icon="book-cog-outline"
+            icon="cog-outline"
             iconColor={theme.onSurface}
-            onPress={() => setModePanelVisible(true)}
+            onPress={() => setSettingsVisible(true)}
           />
         </View>
       ) : null}
+
       {!chromeHidden ? (
-        <View
-          style={[
-            styles.footer,
-            { paddingBottom: bottom, backgroundColor: theme.surface },
-          ]}
-        >
-          <IconButton
-            icon="chevron-left"
-            iconColor={theme.onSurface}
-            disabled={index <= 0}
-            onPress={goPrev}
-          />
-          {pages && pages.length > 1 ? (
-            <View style={styles.seekbar}>
-              <Text
-                style={[styles.pageCount, { color: theme.onSurfaceVariant }]}
-              >
-                {Math.min(currentPage + 1, pages.length)} / {pages.length}
+        <View style={[styles.footer, { paddingBottom: bottom + 4 }]}>
+          <View style={styles.seekRow}>
+            <IconButton
+              icon="skip-previous"
+              mode="contained"
+              containerColor={pillBg}
+              iconColor={theme.onSurface}
+              size={20}
+              disabled={index <= 0}
+              onPress={goPrev}
+            />
+            <View style={[styles.pill, { backgroundColor: pillBg }]}>
+              <Text style={[styles.pageNum, { color: theme.onSurfaceVariant }]}>
+                {pages ? Math.min(currentPage + 1, pages.length) : 0}
               </Text>
-              <Slider
-                style={styles.slider}
-                value={currentPage}
-                min={0}
-                max={pages.length - 1}
-                step={1}
-                onSlidingComplete={seekToPage}
-              />
+              <View style={styles.slider}>
+                <Slider
+                  size="xs"
+                  showStops={!!pages && pages.length <= 60}
+                  value={currentPage}
+                  min={0}
+                  max={pages && pages.length > 1 ? pages.length - 1 : 1}
+                  step={1}
+                  onSlidingComplete={seekToPage}
+                />
+              </View>
+              <Text style={[styles.pageNum, { color: theme.onSurfaceVariant }]}>
+                {pages?.length ?? 0}
+              </Text>
             </View>
-          ) : (
-            <View style={styles.seekbar} />
-          )}
-          <IconButton
-            icon="chevron-right"
-            iconColor={theme.onSurface}
-            disabled={index >= chapters.length - 1}
-            onPress={goNext}
-          />
+            <IconButton
+              icon="skip-next"
+              mode="contained"
+              containerColor={pillBg}
+              iconColor={theme.onSurface}
+              size={20}
+              disabled={index >= chapters.length - 1}
+              onPress={goNext}
+            />
+          </View>
+
+          <View style={[styles.toolbar, { backgroundColor: theme.surface }]}>
+            <IconButton
+              icon={bookmarked ? 'bookmark' : 'bookmark-outline'}
+              iconColor={bookmarked ? theme.primary : theme.onSurface}
+              onPress={toggleBookmark}
+            />
+            <IconButton
+              icon="book-open-page-variant-outline"
+              iconColor={theme.onSurface}
+              onPress={() => setSettingsVisible(true)}
+            />
+            <IconButton
+              icon="cog-outline"
+              iconColor={theme.onSurface}
+              onPress={() => setSettingsVisible(true)}
+            />
+          </View>
         </View>
       ) : null}
-      <MangaReaderModePanel
-        visible={modePanelVisible}
-        onDismiss={() => setModePanelVisible(false)}
-        value={readerMode}
-        onChange={setReaderMode}
+
+      <MangaReaderSettingsSheet
+        visible={settingsVisible}
+        onDismiss={() => setSettingsVisible(false)}
+        mode={readerMode}
+        onModeChange={setReaderMode}
+        sidePadding={sidePadding}
+        onSidePaddingChange={v => setMangaReaderSettings({ sidePadding: v })}
       />
     </View>
   );
@@ -318,20 +386,32 @@ export default MangaChapterScreen;
 const styles = StyleSheet.create({
   chapterName: { fontSize: 12 },
   container: { flex: 1 },
-  footer: {
-    alignItems: 'center',
-    bottom: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
+  footer: { bottom: 0, left: 0, position: 'absolute', right: 0 },
   header: { alignItems: 'center', flexDirection: 'row' },
   headerTitles: { flex: 1 },
   loading: { flex: 1, justifyContent: 'center' },
   mangaName: { fontSize: 14, fontWeight: '600' },
-  pageCount: { fontSize: 12, marginBottom: -4, textAlign: 'center' },
-  seekbar: { flex: 1, justifyContent: 'center', paddingHorizontal: 4 },
-  slider: { width: '100%' },
+  pageNum: { fontSize: 12, minWidth: 24, textAlign: 'center' },
+  pill: {
+    alignItems: 'center',
+    borderRadius: 24,
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+  },
+  seekRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 8,
+  },
+  slider: { flex: 1, marginHorizontal: 6 },
+  toolbar: {
+    borderRadius: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    marginTop: 6,
+  },
 });

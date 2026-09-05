@@ -2,16 +2,22 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from '@react-native-vector-icons/material-design-icons';
 
+import { formatDate } from '@utils/dateFormat';
 import type { ThemeColors } from '@theme/types';
 import type { DisplayMangaChapter } from '@navigators/types';
 
 /**
  * One chapter row on the manga details screen — Mihon's chapter-list item:
- * chapter name on top, a metadata subtitle below (release date and/or
- * scanlator), and unread/read state shown by dimming the whole row once
- * read. `unread` only exists on a persisted `MangaChapter` row; a chapter
- * from a not-yet-added manga has no read state, so it always renders as
- * unread (which is correct — nothing's been tracked for it).
+ * chapter name on top, a metadata subtitle below (relative release date +
+ * scanlator + paged progress), unread/read state shown by dimming the whole
+ * row once read, and a trailing download control. `unread` only exists on a
+ * persisted `MangaChapter` row; a chapter from a not-yet-added manga has no
+ * read state, so it always renders as unread (correct — nothing's tracked).
+ *
+ * The download icon is a deliberate placeholder: manga offline downloads
+ * (Phase 4) aren't built yet — no download logic, storage, or queue — so it
+ * renders disabled to show where the control will live without pretending
+ * to work.
  */
 interface MangaChapterRowProps {
   chapter: DisplayMangaChapter;
@@ -21,9 +27,7 @@ interface MangaChapterRowProps {
 
 const formatReleaseTime = (value?: string | null): string | undefined => {
   if (!value) return undefined;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString();
+  return formatDate(value, 'MMM DD, YYYY', true);
 };
 
 const MangaChapterRow = ({ chapter, theme, onPress }: MangaChapterRowProps) => {
@@ -76,6 +80,13 @@ const MangaChapterRow = ({ chapter, theme, onPress }: MangaChapterRowProps) => {
           </Text>
         ) : null}
       </View>
+      <View testID="chapter-download-placeholder" style={styles.downloadIcon}>
+        <Icon
+          name="arrow-down-circle-outline"
+          size={22}
+          color={theme.onSurfaceDisabled}
+        />
+      </View>
     </Pressable>
   );
 };
@@ -84,6 +95,7 @@ export default memo(MangaChapterRow);
 
 const styles = StyleSheet.create({
   bookmarkIcon: { marginRight: 8 },
+  downloadIcon: { marginLeft: 12 },
   name: { fontSize: 14 },
   row: {
     alignItems: 'center',

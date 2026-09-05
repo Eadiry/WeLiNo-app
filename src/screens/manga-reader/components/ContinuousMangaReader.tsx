@@ -5,7 +5,7 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
 
 import MangaPageImage from '@components/MangaPageImage';
@@ -20,6 +20,8 @@ interface ContinuousMangaReaderProps {
   initialPage?: number;
   /** Reading direction — right-to-left reverses scroll/page order, same convention as `PagedMangaReader`'s `rtl` prop. */
   rtl?: boolean;
+  /** Horizontal page inset as a fraction of screen width per side (0–0.25). */
+  sidePadding?: number;
   /** Furthest page seen (in original, non-reversed page order), as a 0-100 percentage and the raw page index — same shape as `VerticalMangaReader`'s `onProgress`. */
   onProgress: (percent: number, pageIndex: number) => void;
   onTap?: () => void;
@@ -50,12 +52,14 @@ const ContinuousMangaReader = forwardRef<
       theme,
       initialPage = 0,
       rtl = false,
+      sidePadding = 0,
       onProgress,
       onTap,
     },
     ref,
   ) => {
     const { width } = useWindowDimensions();
+    const pageWidth = width * (1 - sidePadding * 2);
     const listRef = useRef<LegendListRef>(null);
     const furthestRef = useRef(initialPage);
 
@@ -109,12 +113,14 @@ const ContinuousMangaReader = forwardRef<
         estimatedItemSize={width}
         onViewableItemsChanged={handleViewableItemsChanged}
         renderItem={({ item }) => (
-          <MangaPageImage
-            uri={item}
-            requestInit={requestInit}
-            theme={theme}
-            width={width}
-          />
+          <View style={[styles.slot, { width }]}>
+            <MangaPageImage
+              uri={item}
+              requestInit={requestInit}
+              theme={theme}
+              width={pageWidth}
+            />
+          </View>
         )}
         onTouchEnd={onTap}
         recycleItems
@@ -126,3 +132,7 @@ const ContinuousMangaReader = forwardRef<
 ContinuousMangaReader.displayName = 'ContinuousMangaReader';
 
 export default ContinuousMangaReader;
+
+const styles = StyleSheet.create({
+  slot: { alignItems: 'center' },
+});

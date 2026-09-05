@@ -368,7 +368,19 @@ function wrapPaperbackExtension(
       // source that exposes no discover sections at all.
       const sections = await discoverSections();
       if (sections.length > 0 && ext.getDiscoverSectionItems) {
-        const section = sections[0];
+        // "Latest" targets a discover section whose id/title reads as
+        // latest/recent/updates/new; every other case (and no match) uses
+        // the source's first section, its intended "Popular" shelf.
+        const latestRe = /latest|recent|update|new/i;
+        const section =
+          options?.showLatestManga &&
+          sections.find(
+            s => latestRe.test(s.id ?? '') || latestRe.test(s.title ?? ''),
+          )
+            ? sections.find(
+                s => latestRe.test(s.id ?? '') || latestRe.test(s.title ?? ''),
+              )!
+            : sections[0];
         const results = await ext.getDiscoverSectionItems(section, metadata);
         if (results.metadata !== undefined) {
           discoverMetadataByPage.set(pageNo + 1, results.metadata);

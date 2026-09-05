@@ -77,6 +77,38 @@ describe('MangaChapterRow', () => {
     expect(screen.getByText(/ScanGroup • Page 5$/)).toBeTruthy();
   });
 
+  it('renders a non-locale absolute date once the release is older than a week', () => {
+    render(
+      <MangaChapterRow
+        chapter={
+          {
+            ...baseChapter,
+            releaseTime: '2021-08-08T12:00:00.000Z',
+            scanlator: null,
+            lastPageRead: 0,
+          } as DisplayMangaChapter
+        }
+        theme={theme}
+        onPress={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Aug 08, 2021')).toBeTruthy();
+  });
+
+  it('shows an inert placeholder download control', () => {
+    render(
+      <MangaChapterRow
+        chapter={baseChapter}
+        theme={theme}
+        onPress={jest.fn()}
+      />,
+    );
+    const placeholder = screen.getByTestId('chapter-download-placeholder');
+    expect(placeholder).toBeTruthy();
+    // no press handler — downloads aren't built yet (Phase 4)
+    expect(placeholder.props.onStartShouldSetResponder).toBeUndefined();
+  });
+
   it('fires onPress', () => {
     const onPress = jest.fn();
     render(
