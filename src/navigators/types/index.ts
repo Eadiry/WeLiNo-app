@@ -1,4 +1,5 @@
 import { ChapterInfo, NovelInfo } from '@database/types';
+import type { MangaRow } from '@database/schema';
 import {
   CompositeScreenProps,
   NavigatorScreenParams,
@@ -30,6 +31,11 @@ export type RootStackParamList = {
     pluginId: string;
     isNovel?: boolean;
   };
+  MangaBrowseScreen: undefined;
+  MangaSourceScreen: { pluginId: string; pluginName: string };
+  MangaScreen:
+    | MangaRow
+    | { path: string; pluginId: string; name: string; cover?: string | null };
 };
 
 export type BottomNavigatorParamList = {
@@ -37,8 +43,29 @@ export type BottomNavigatorParamList = {
   Updates: undefined;
   History: undefined;
   Browse: undefined;
+  Manga: undefined;
   More: undefined;
 };
+
+export type MangaLibraryScreenProps = CompositeScreenProps<
+  MaterialBottomTabScreenProps<BottomNavigatorParamList, 'Manga'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+export type MangaBrowseScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  'MangaBrowseScreen'
+>;
+
+export type MangaSourceScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  'MangaSourceScreen'
+>;
+
+export type MangaScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  'MangaScreen'
+>;
 
 export type LibraryScreenProps = CompositeScreenProps<
   MaterialBottomTabScreenProps<BottomNavigatorParamList, 'Library'>,

@@ -1,0 +1,245 @@
+import { useCallback, useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Button } from 'react-native-paper';
+
+import { EmptyView, SafeAreaView, SegmentedControl } from '@components';
+import NovelCoverImage from '@components/NovelCoverImage';
+import { useTheme } from '@hooks/persisted';
+import { showToast } from '@utils/showToast';
+
+import { dbManager } from '@database/db';
+import {
+  mangaSchema,
+  type MangaChapterRow,
+  type MangaRow,
+} from '@database/schema';
+import {
+  fetchManga,
+  getMangaByPath,
+  switchMangaToLibraryQuery,
+} from '@database/queries/MangaQueries';
+import { getMangaChaptersFromDb } from '@database/queries/MangaChapterQueries';
+import { getMangaPlugin } from '@plugins/mangaPluginManager';
+import type { MangaChapterItem, SourceManga } from '@plugins/types/manga';
+import { eq } from 'drizzle-orm';
+import type { MangaScreenProps } from '@navigators/types';
+
+/** Whichever shape the manga is currently known in — a saved DB row, or the not-yet-added source response. */
+type DisplayChapter = MangaChapterRow | (MangaChapterItem & { id: string });
+
+/**
+ * Manga's `NovelScreen.tsx`/`NovelContext.tsx` mirror — deliberately a plain
+ * `useState`/`useEffect` screen rather than the novel reader's Zustand store
+ * (`useNovel/store/`): that store exists to serve the reader's chapter
+ * navigation/prefetching, which doesn't exist yet (Phase 3). Series detail +
+ * chapter list + library toggle + reader-mode toggle don't need it.
+ *
+ * Mirrors `switchNovelToLibraryQuery`'s "not in DB until added" model: a
+ * manga opened from Browse is fetched live from its plugin and shown
+ * transiently until the user adds it to the library, at which point it's
+ * persisted and re-read from the DB.
+ */
+const MangaScreen = ({ route, navigation }: MangaScreenProps) => {
+  const theme = useTheme();
+  const params = route.params;
+  const isDbRow = 'id' in params;
+  const pluginId = params.pluginId;
+  const path = isDbRow ? params.path : params.path;
+
+  const [dbManga, setDbManga] = useState<MangaRow | undefined>(
+    isDbRow ? (params as MangaRow) : getMangaByPath(path, pluginId),
+  );
+  const [sourceManga, setSourceManga] = useState<SourceManga>();
+  const [isLoading, setIsLoading] = useState(!dbManga);
+  const [error, setError] = useState<string>();
+  const [chapters, setChapters] = useState<DisplayChapter[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const plugin = getMangaPlugin(pluginId);
+
+  const load = useCallback(async () => {
+    const existing = getMangaByPath(path, pluginId);
+    if (existing) {
+      setDbManga(existing);
+      setIsLoading(false);
+      const rows = await getMangaChaptersFromDb(existing.id);
+      setChapters(rows);
+      return;
+    }
+    setIsLoading(true);
+    setError(undefined);
+    try {
+      const res = await fetchManga(pluginId, path);
+      setSourceManga(res);
+      setChapters(res.chapters.map((c, i) => ({ ...c, id: `${i}-${c.path}` })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [path, pluginId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const displayed = dbManga ?? sourceManga;
+
+  const toggleLibrary = useCallback(async () => {
+    setBusy(true);
+    try {
+      await switchMangaToLibraryQuery(path, pluginId);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }, [path, pluginId, load]);
+
+  const setReaderMode = useCallback(
+    async (mode: MangaRow['readerMode']) => {
+      if (!dbManga) return;
+      await dbManager.write(async tx => {
+        tx.update(mangaSchema)
+          .set({ readerMode: mode })
+          .where(eq(mangaSchema.id, dbManga.id))
+          .run();
+      });
+      setDbManga({ ...dbManga, readerMode: mode });
+    },
+    [dbManga],
+  );
+
+  const openChapter = useCallback(() => {
+    // The reader (both paged and vertical modes) is Phase 3 — this screen's
+    // job is proving series metadata + chapter list works end to end first.
+    showToast("The manga reader isn't built yet — coming in a later update.");
+  }, []);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView>
+        <ActivityIndicator style={styles.centerLoading} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!displayed) {
+    return (
+      <SafeAreaView>
+        <EmptyView
+          description={error ?? 'Could not load this manga.'}
+          theme={theme}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  const inLibrary = Boolean(dbManga?.inLibrary);
+
+  return (
+    <SafeAreaView>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.headerRow}>
+          <NovelCoverImage
+            uri={displayed.cover}
+            requestInit={plugin?.imageRequestInit}
+            theme={theme}
+            style={styles.cover}
+          />
+          <View style={styles.headerDetails}>
+            <Text style={[styles.title, { color: theme.onSurface }]}>
+              {displayed.name}
+            </Text>
+            {displayed.author ? (
+              <Text style={{ color: theme.onSurfaceVariant }}>
+                {displayed.author}
+              </Text>
+            ) : null}
+            {displayed.status ? (
+              <Text style={{ color: theme.onSurfaceVariant }}>
+                {displayed.status}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <Button
+          mode={inLibrary ? 'outlined' : 'contained'}
+          onPress={toggleLibrary}
+          loading={busy}
+          disabled={busy}
+          style={styles.libraryButton}
+        >
+          {inLibrary ? 'In library' : 'Add to library'}
+        </Button>
+
+        {dbManga ? (
+          <View style={styles.readerModeRow}>
+            <Text
+              style={[styles.sectionHeading, { color: theme.onSurfaceVariant }]}
+            >
+              Reader mode
+            </Text>
+            <SegmentedControl<'paged' | 'vertical'>
+              options={[
+                { value: 'vertical', label: 'Vertical (manhua/manhwa)' },
+                { value: 'paged', label: 'Paged (manga)' },
+              ]}
+              value={dbManga.readerMode}
+              onChange={setReaderMode}
+              theme={theme}
+            />
+          </View>
+        ) : null}
+
+        {displayed.genres ? (
+          <Text style={[styles.genres, { color: theme.onSurfaceVariant }]}>
+            {displayed.genres}
+          </Text>
+        ) : null}
+        {displayed.summary ? (
+          <Text style={[styles.summary, { color: theme.onSurface }]}>
+            {displayed.summary}
+          </Text>
+        ) : null}
+
+        <Text
+          style={[styles.sectionHeading, { color: theme.onSurfaceVariant }]}
+        >
+          {chapters.length} chapter{chapters.length === 1 ? '' : 's'}
+        </Text>
+        {chapters.map(chapter => (
+          <Text
+            key={String(chapter.id)}
+            onPress={openChapter}
+            style={[styles.chapterRow, { color: theme.onSurface }]}
+          >
+            {chapter.name}
+          </Text>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+export default MangaScreen;
+
+const styles = StyleSheet.create({
+  centerLoading: { flex: 1, justifyContent: 'center' },
+  chapterRow: { paddingVertical: 10 },
+  content: { padding: 16 },
+  cover: { borderRadius: 6, height: 150, width: 100 },
+  genres: { fontSize: 12, marginTop: 8 },
+  headerDetails: { flex: 1, marginStart: 16 },
+  headerRow: { flexDirection: 'row' },
+  libraryButton: { marginTop: 16 },
+  readerModeRow: { marginTop: 16 },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  summary: { marginTop: 8 },
+  title: { fontSize: 18, fontWeight: '700' },
+});

@@ -5,6 +5,7 @@ import Library from '../screens/library/LibraryScreen';
 import Updates from '../screens/updates/UpdatesScreen';
 import History from '../screens/history/HistoryScreen';
 import Browse from '../screens/browse/BrowseScreen';
+import MangaLibrary from '../screens/mangaLibrary/MangaLibraryScreen';
 import More from '../screens/more/MoreScreen';
 
 import { getString } from '@i18n/translations';
@@ -50,6 +51,9 @@ const BottomNavigator = () => {
           break;
         case 'Browse':
           iconName = 'compass-outline';
+          break;
+        case 'Manga':
+          iconName = 'image-multiple-outline';
           break;
         case 'More':
           iconName = 'dots-horizontal';
@@ -122,6 +126,13 @@ const BottomNavigator = () => {
           tabBarBadge: pluginsWithUpdate
             ? pluginsWithUpdate.toString()
             : undefined,
+        }}
+      />
+      <Tab.Screen
+        name="Manga"
+        component={MangaLibrary}
+        options={{
+          title: 'Manga',
         }}
       />
       <Tab.Screen

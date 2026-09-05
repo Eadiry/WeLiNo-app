@@ -228,6 +228,10 @@ const fetchMangaPlugins = async (): Promise<MangaPluginItem[]> => {
 
 const getMangaPlugin = (pluginId: string) => plugins[pluginId];
 
+/** Every currently-loaded manga plugin, of any format — the "Sources" tab's data source. */
+const getInstalledMangaPlugins = (): MangaPlugin[] =>
+  Object.values(plugins).filter((p): p is MangaPlugin => !!p);
+
 const loadMangaPlugin = async (
   pluginId: string,
   format: MangaPluginItem['format'] = 'native',
@@ -303,6 +307,7 @@ const reloadInstalledMangaPlugins = async (): Promise<string[]> => {
 
 export {
   getMangaPlugin,
+  getInstalledMangaPlugins,
   loadMangaPlugin,
   initializeInstalledMangaPlugins,
   reloadInstalledMangaPlugins,
