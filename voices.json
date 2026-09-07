@@ -1,0 +1,47 @@
+{
+  "engine": {
+    "id": "piper-libritts-medium",
+    "name": "Piper — LibriTTS (English)",
+    "format": "sherpa-onnx-vits",
+    "bundleUrl": "https://github.com/Eadiry/WeLiNo-app/releases/download/piper-libritts-medium/piper-libritts-medium.zip",
+    "bundleBytes": 73308398
+  },
+  "voices": [
+    {
+      "id": "libritts-ava",
+      "name": "Ava (Female)",
+      "language": "en-US",
+      "speakerId": 0
+    },
+    {
+      "id": "libritts-sophie",
+      "name": "Sophie (Female)",
+      "language": "en-US",
+      "speakerId": 10
+    },
+    {
+      "id": "libritts-isla",
+      "name": "Isla (Female)",
+      "language": "en-US",
+      "speakerId": 40
+    },
+    {
+      "id": "libritts-owen",
+      "name": "Owen (Male)",
+      "language": "en-US",
+      "speakerId": 92
+    },
+    {
+      "id": "libritts-marcus",
+      "name": "Marcus (Male)",
+      "language": "en-US",
+      "speakerId": 200
+    },
+    {
+      "id": "libritts-leo",
+      "name": "Leo (Male)",
+      "language": "en-US",
+      "speakerId": 500
+    }
+  ]
+}
